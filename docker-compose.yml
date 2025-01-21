@@ -1,0 +1,102 @@
+services:
+  kingdoms-api-gateway:
+    container_name: kingdoms-api-gateway
+    image: nginx:stable-bullseye
+    env_file: ".env"
+    ports:
+      - "${API_HOST_PORT}:${API_CONTAINER_PORT}"
+    volumes:
+      - ./services/api-gateway/dockerization/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./services/api-gateway/dockerization/site.conf:/etc/nginx/conf.d/site.conf:ro
+      - shared-media:/media
+    depends_on:
+      - kingdoms-auth
+
+  kingdoms-pg:
+    container_name: kingdoms-pg
+    image: postgres:latest
+    env_file: ".env"
+    environment:
+      POSTGRES_DB: ${AUTH_PG_NAME}
+      POSTGRES_USER: ${AUTH_PG_USER}
+      POSTGRES_PASSWORD: ${AUTH_PG_PASSWORD}
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    expose:
+      - "${PG_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $AUTH_PG_USER -d $AUTH_PG_NAME"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/auth/dockerization/db_init.sql:/docker-entrypoint-initdb.d/auth_db_init.sql
+
+  kingdoms-auth-cache:
+    container_name: kingdoms-auth-cache
+    image: redis:bullseye
+    expose:
+      - "${REDIS_PORT}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kingdoms-auth:
+    container_name: kingdoms-auth
+    build:
+      context: ./services/auth/
+      dockerfile: ./dockerization/Dockerfile
+    expose:
+      - "${AUTH_PORT}"
+    env_file: ".env"
+    working_dir: /opt/projects/auth/
+    volumes:
+      - "./services/auth/src:/opt/projects/auth/"
+      - "shared-media:/opt/projects/auth/media/"
+    command: "uvicorn main:app --reload --host ${AUTH_HOST} --port ${AUTH_PORT}"
+    depends_on:
+      kingdoms-auth-cache:
+        condition: service_healthy
+      kingdoms-pg:
+        condition: service_healthy
+
+  kingdoms-auth-worker:
+    container_name: kingdoms-auth-worker
+    build:
+      context: ./services/auth/
+      dockerfile: ./dockerization/Dockerfile
+    env_file: ".env"
+    working_dir: /opt/projects/auth/
+    volumes:
+      - "./services/auth/src:/opt/projects/auth/"
+      - "shared-media:/media/"
+    command: "taskiq worker tasks:broker"
+    depends_on:
+      kingdoms-auth-cache:
+        condition: service_healthy
+      kingdoms-pg:
+        condition: service_healthy
+
+  kingdoms-front:
+    container_name: kingdoms-front
+    build:
+      context: ./services/front/
+      dockerfile: ./dockerization/Dockerfile
+    expose:
+      - "${FRONT_PORT}"
+    env_file: ".env"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    user: "node"
+    working_dir: /opt/projects/front/
+    volumes:
+      - "./services/front/:/opt/projects/front/"
+    command: "npm run dev -- --host"
+    depends_on:
+      - kingdoms-auth
+
+volumes:
+  shared-media:
+  pgdata:

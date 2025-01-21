@@ -1,0 +1,45 @@
+[tool.poetry]
+name = "auth"
+version = "0.1.0"
+description = ""
+authors = ["serafinovsky <m.serafinovskiy@dev.kokoc.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+orjson = "^3.10.12"
+asyncpg = "^0.30.0"
+alembic = "^1.14.0"
+psycopg2-binary = "^2.9.10"
+sqlalchemy = "^2.0.36"
+uvicorn = "^0.34.0"
+fastapi = "^0.115.6"
+pydantic-settings = "^2.7.0"
+redis = "^5.2.1"
+httpx = "^0.28.1"
+pyjwt = "^2.10.1"
+huey = "^2.5.2"
+gevent = "^24.11.1"
+aiofiles = "^24.1.0"
+taskiq = "^0.11.10"
+taskiq-redis = "^1.0.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+pytest-asyncio = "^0.25.0"
+mypy = "^1.14.0"
+black = "^24.10.0"
+flake8 = "^7.1.1"
+pydantic = "^2.10.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 79
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
