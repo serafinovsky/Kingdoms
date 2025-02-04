@@ -16,8 +16,8 @@ class RedisManager:
         """
         self.redis_pool = redis.ConnectionPool.from_url(
             settings.redis_dsn.unicode_string(),
-            decode_responses=True,  # Automatically decode responses to strings
-            retry_on_timeout=True,  # Retry on connection timeouts
+            decode_responses=True,
+            retry_on_timeout=True,
         )
 
     async def close(self) -> None:

@@ -1,0 +1,52 @@
+[tool.poetry]
+name = "cabinet"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+motor = "^3.7.0"
+fastapi = "^0.115.8"
+pydantic = "^2.10.6"
+pydantic-settings = "^2.7.1"
+pytest = "^8.3.4"
+pytest-asyncio = "^0.25.3"
+orjson = "^3.10.15"
+uvicorn = "^0.34.0"
+httpx = "^0.28.1"
+tenacity = "^9.0.0"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
+pytest = "^8.3.4"
+pytest-asyncio = "^0.25.3"
+ruff = "^0.9.4"
+mongomock-motor = "^0.0.35"
+httpx = "^0.28.1"
+python-dotenv = "^1.0.1"
+ipython = "^8.32.0"
+requests = "^2.32.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_typed = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

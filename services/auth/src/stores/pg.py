@@ -20,12 +20,8 @@ class SessionManager:
         The database URL is retrieved from the application settings.
         """
         url = settings.pg_dsn.unicode_string()
-        self._engine = create_async_engine(
-            url, future=True, echo=settings.debug
-        )
-        self._sessionmaker = async_sessionmaker(
-            self._engine, expire_on_commit=False
-        )
+        self._engine = create_async_engine(url, future=True, echo=settings.debug)
+        self._sessionmaker = async_sessionmaker(self._engine, expire_on_commit=False)
 
     async def close(self) -> None:
         """

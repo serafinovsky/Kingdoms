@@ -7,8 +7,13 @@ export default {
     container: {
       center: true,
     },
-    extend: {},
+    extend: {
+      backdropBlur: {
+        xs: '2px',
+      },
+    },
   },
-  plugins: [],
+  plugins: [
+    require('tailwind-scrollbar')({ nocompatible: true }),
+  ],
 }
-

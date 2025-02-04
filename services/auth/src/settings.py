@@ -23,6 +23,7 @@ class AppSettings(BaseSettings):
     yandex_redirect: str
     access_token_ttl: int
     refresh_token_ttl: int
+    min_refresh_ttl: int = Field(default=24 * 60 * 60)
     refresh_token_cookie: str = Field(default="_rt")
 
     media_root: str = "/media"

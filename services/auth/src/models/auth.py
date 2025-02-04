@@ -11,33 +11,18 @@ from models.base import Base
 class User(Base):
     __tablename__ = "user"
 
-    joined_dt: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
-    )
-    provider: Mapped[Provider] = mapped_column(
-        Enum(Provider, native_enum=False, length=48)
-    )
+    joined_dt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    provider: Mapped[Provider] = mapped_column(Enum(Provider, native_enum=False, length=48))
     external_id: Mapped[str]
     profile: Mapped["Profile"] = relationship(
         "Profile", back_populates="user", uselist=False, lazy="joined"
     )
-    login_history = relationship(
-        "LoginHistory", back_populates="user", uselist=False
-    )
+    login_history = relationship("LoginHistory", back_populates="user", uselist=False)
 
-    __table_args__ = (
-        Index(
-            "ix_external_id_provider", "external_id", "provider", unique=True
-        ),
-    )
+    __table_args__ = (Index("ix_external_id_provider", "external_id", "provider", unique=True),)
 
     def __repr__(self) -> str:
-        """String representation of the user record."""
-        return (
-            f"<User "
-            f"joined_dt={self.joined_dt.isoformat()} "
-            f"provider={self.provider.name}>"
-        )
+        return f"<User joined_dt={self.joined_dt.isoformat()} provider={self.provider.name}>"
 
 
 class Profile(Base):
@@ -57,13 +42,7 @@ class Profile(Base):
     )
 
     def __repr__(self) -> str:
-        """String representation of the profile record."""
-        return (
-            f"<Profile "
-            f"user_id={self.user_id} "
-            f"username={self.username} "
-            f"name={self.name}>"
-        )
+        return f"<Profile user_id={self.user_id} username={self.username} name={self.name}>"
 
 
 class LoginHistory(Base):
@@ -95,7 +74,6 @@ class LoginHistory(Base):
     )
 
     def __repr__(self) -> str:
-        """String representation of the login record."""
         return (
             f"<LoginHistory "
             f"user_id={self.user_id} "

@@ -9,9 +9,9 @@ interface AccessTokenResponse {
 
 export default function Redirect() {
   const params = useParams();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [status, setStatus] = createSignal<"loading" | "success" | "error">("loading");
+  const [countdown, setCountdown] = createSignal(1);
 
   const code = searchParams.code;
   const supportedPlatforms = ["github", "yandex"];
@@ -25,15 +25,15 @@ export default function Redirect() {
   }
 
   axios
-    .post(`/api/auth/${params.platform}/token/`, { code })
+    .post(`/api/v1/auth/${params.platform}/token/`, { code })
     .then((response: AxiosResponse<AccessTokenResponse>) => {
       const token = response.data;
       authActions.setAccessToken(token.access_token);
       setStatus("success");
 
       setTimeout(() => {
-        navigate("/");
-      }, 800); 
+        window.close();
+      }, 1000);
     })
     .catch((error: AxiosError) => {
       console.error(error.message);
@@ -41,48 +41,82 @@ export default function Redirect() {
     });
 
   return (
-    <div class="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      {status() === "loading" && (
-        <div class="w-24 h-24 border-4 border-blue-500 border-solid rounded-full border-t-transparent animate-spin"></div>
-      )}
-      {status() === "success" && (
-        <div class="flex flex-col items-center text-emerald-600">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-28 h-28"
-            viewBox="0 0 28 28"
-            fill="currentColor"
-          >
-            <circle cx="12" cy="12" r="10" fill="currentColor" />
-            <path
-              d="M15.535 8.465a1 1 0 00-1.414 0L12 10.586l-2.121-2.121a1 1 0 10-1.414 1.414L10.586 12l-2.121 2.121a1 1 0 001.414 1.414L12 13.414l2.121 2.121a1 1 0 001.414-1.414L13.414 12l2.121-2.121a1 1 0 000-1.414z"
-              fill="#fff"
-            />
-          </svg>
-          <p class="mt-4 text-lg">Authorization successful!</p>
-          <p class="mt-1 text-sm text-gray-500">Redirecting in 1 second...</p>
+    <div class="min-h-screen flex items-center justify-center p-4">
+      <div class="w-full max-w-md">
+        <div class="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl 
+                    border border-white/20 hover:shadow-2xl transition-all duration-300">
+          {status() === "loading" && (
+            <div class="flex flex-col items-center gap-4">
+              <div class="w-8 h-8 border-4 border-sky-600/50 border-t-sky-600 
+                          rounded-full animate-spin" />
+              <p class="text-gray-600">Авторизация...</p>
+            </div>
+          )}
+
+          {status() === "success" && (
+            <div class="flex flex-col items-center gap-4 text-emerald-600">
+              <div class="w-16 h-16 rounded-full bg-emerald-600/10 
+                          flex items-center justify-center">
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  class="w-8 h-8" 
+                  viewBox="0 0 20 20" 
+                  fill="currentColor"
+                >
+                  <path 
+                    fill-rule="evenodd" 
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" 
+                    clip-rule="evenodd" 
+                  />
+                </svg>
+              </div>
+              <div class="text-center">
+                <p class="text-lg font-medium text-gray-800">
+                  Авторизация успешна!
+                </p>
+                <p class="mt-1 text-sm text-gray-500">
+                  Окно закроется автоматически через {countdown()} сек...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {status() === "error" && (
+            <div class="flex flex-col items-center gap-4 text-red-600">
+              <div class="w-16 h-16 rounded-full bg-red-600/10 
+                          flex items-center justify-center">
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  class="w-8 h-8" 
+                  viewBox="0 0 20 20" 
+                  fill="currentColor"
+                >
+                  <path 
+                    fill-rule="evenodd" 
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" 
+                    clip-rule="evenodd" 
+                  />
+                </svg>
+              </div>
+              <div class="text-center">
+                <p class="text-lg font-medium text-gray-800">
+                  Ошибка авторизации
+                </p>
+                <p class="mt-1 text-sm text-gray-500">
+                  Пожалуйста, попробуйте снова
+                </p>
+              </div>
+              <button
+                onClick={() => window.close()}
+                class="mt-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm 
+                       hover:bg-gray-200 active:scale-95 transition-all duration-150"
+              >
+                Закрыть окно
+              </button>
+            </div>
+          )}
         </div>
-      )}
-      {status() === "error" && (
-        <div class="flex flex-col items-center text-rose-600">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-28 h-28"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <circle cx="12" cy="12" r="10" fill="currentColor" />
-            <path
-              d="M16.192 7.808a1 1 0 0 0-1.414 0L12 10.586 9.222 7.808a1 1 0 0 0-1.414 1.414L10.586 12l-2.778 2.778a1 1 0 1 0 1.414 1.414L12 13.414l2.778 2.778a1 1 0 0 0 1.414-1.414L13.414 12l2.778-2.778a1 1 0 0 0 0-1.414z"
-              fill="#fff"
-            />
-          </svg>
-          <p class="mt-4 text-lg">Authorization failed, please try again.</p>
-          <a href="/login" class="mt-2 text-blue-500 underline">
-            Go back to the login page
-          </a>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

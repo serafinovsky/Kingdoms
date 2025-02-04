@@ -48,9 +48,7 @@ class AccessPayload(TokenMeta):
     )
     exp: int = Field(
         default_factory=lambda: int(
-            (
-                datetime.now() + timedelta(seconds=settings.access_token_ttl)
-            ).timestamp()
+            (datetime.now() + timedelta(seconds=settings.access_token_ttl)).timestamp()
         ),
         description="Token expiration timestamp",
     )
@@ -73,9 +71,7 @@ class RefreshPayload(TokenMeta):
     )
     exp: int = Field(
         default_factory=lambda: int(
-            (
-                datetime.now() + timedelta(seconds=settings.refresh_token_ttl)
-            ).timestamp()
+            (datetime.now() + timedelta(seconds=settings.refresh_token_ttl)).timestamp()
         ),
         description="Token expiration timestamp",
     )

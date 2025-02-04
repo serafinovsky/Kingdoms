@@ -1,4 +1,3 @@
-// api/axios.ts
 import axios, { 
   AxiosError, 
   AxiosInstance, 
@@ -6,9 +5,10 @@ import axios, {
   InternalAxiosRequestConfig 
 } from 'axios';
 import { authStore, authActions } from '../stores/authStore';
+import { BASE_URL } from '../config'
 
 interface RefreshTokenResponse {
-  accessToken: string;
+  access_token: string;
 }
 
 interface QueueItem {
@@ -18,7 +18,7 @@ interface QueueItem {
 
 const API_BASE_URL = 'http://127.0.0.1:8889';
 const AUTH_ENDPOINTS = {
-  refresh: `${API_BASE_URL}/api/auth/token/refresh/`,
+  refresh: `${API_BASE_URL}/api/v1/auth/token/refresh/`,
 };
 const REQUEST_TIMEOUT = 10000;
 
@@ -60,8 +60,9 @@ class ApiClient {
         { withCredentials: true }
       );
       
-      authActions.setAccessToken(data.accessToken);
-      return data.accessToken;
+      const newToken = data.access_token;
+      authActions.setAccessToken(newToken);
+      return newToken;
     } catch (error) {
       authActions.clearAuth();
       throw error;
@@ -78,13 +79,17 @@ class ApiClient {
         this.isRefreshing = true;
 
         return this.refreshAuthToken()
-          .then(() => {
+          .then((newToken) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            }
+            this.api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
             this.processQueue();
-            originalRequest.headers.Authorization = `Bearer ${authStore.accessToken}`;
-            return this.api(originalRequest);
+            return this.api.request(originalRequest);
           })
           .catch((refreshError) => {
             this.processQueue(refreshError as AxiosError);
+            authActions.clearAuth();
             window.location.href = '/login';
             return Promise.reject(refreshError);
           })
@@ -96,8 +101,11 @@ class ApiClient {
       return new Promise((resolve, reject) => {
         this.addToQueue({
           resolve: () => {
-            originalRequest.headers.Authorization = `Bearer ${authStore.accessToken}`;
-            resolve(this.api(originalRequest));
+            const currentToken = authStore.accessToken;
+            if (originalRequest.headers && currentToken) {
+              originalRequest.headers.Authorization = `Bearer ${currentToken}`;
+            }
+            resolve(this.api.request(originalRequest));
           },
           reject,
         });
@@ -110,8 +118,10 @@ class ApiClient {
   private setupInterceptors(): void {
     this.api.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
-        if (authStore.accessToken) {
-          config.headers.Authorization = `Bearer ${authStore.accessToken}`;
+        const token = authStore.accessToken;
+        if (token) {
+          this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
       },
@@ -121,7 +131,7 @@ class ApiClient {
     this.api.interceptors.response.use(
       (response: AxiosResponse) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 && error.config) {
           return this.handleAuthError(error);
         }
         return Promise.reject(error);

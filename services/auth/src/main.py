@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
-from api.v1 import v1_router
 from logger import logging
+from router.api import api_router
 from stores.pg import session_manager
 from stores.redis import redis_manager
 
@@ -35,4 +35,4 @@ app.add_middleware(
 )
 
 
-app.include_router(v1_router, prefix="/api")
+app.include_router(api_router)

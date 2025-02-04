@@ -1,0 +1,19 @@
+server {
+    listen  ${MEDIA_PORT} default_server;
+    listen [::]:${MEDIA_PORT} default_server;
+    server_name _;
+
+    root /srv;
+
+    location /media/ {
+        autoindex off;
+        try_files $uri =404;
+        expires 30d;
+        add_header Cache-Control "public, immutable"; 
+
+        sendfile_max_chunk 1m; 
+        output_buffers 1 2m; 
+    }
+
+    error_page  404 /404.html;
+}

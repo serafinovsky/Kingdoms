@@ -12,9 +12,7 @@ CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
 
-class RepositoryDB(
-    ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]
-):
+class RepositoryDB(ABC, Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """
     Abstract base class for database repositories.
 
@@ -26,7 +24,7 @@ class RepositoryDB(
         """
         Initialize the repository by dynamically determining the model type.
         """
-        self._model: Type[ModelType] = get_args(self.__orig_bases__[0])[0]
+        self._model: Type[ModelType] = get_args(self.__orig_bases__[0])[0]  # type: ignore
 
     async def get(self, db: AsyncSession, pk: int) -> ModelType | None:
         """
@@ -41,9 +39,7 @@ class RepositoryDB(
         """
         return await db.get(self._model, pk)
 
-    async def create(
-        self, db: AsyncSession, obj_in: CreateSchemaType
-    ) -> ModelType:
+    async def create(self, db: AsyncSession, obj_in: CreateSchemaType) -> ModelType:
         """
         Create a new record in the database.
 
@@ -57,11 +53,7 @@ class RepositoryDB(
         Raises:
             ValueError: If the record could not be created.
         """
-        query = (
-            insert(self._model)
-            .values(**obj_in.model_dump())
-            .returning(self._model)
-        )
+        query = insert(self._model).values(**obj_in.model_dump()).returning(self._model)
         result = await db.scalar(query)
         await db.flush()
 
@@ -89,9 +81,7 @@ class RepositoryDB(
         await db.flush()
         return list(results)
 
-    async def update(
-        self, db: AsyncSession, pk: int, obj_in: UpdateSchemaType
-    ) -> ModelType:
+    async def update(self, db: AsyncSession, pk: int, obj_in: UpdateSchemaType) -> ModelType:
         """
         Update an existing record in the database.
 

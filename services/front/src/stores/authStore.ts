@@ -1,28 +1,3 @@
-// import { createStore } from 'solid-js/store';
-
-// interface AuthStore {
-//   accessToken: string | null;
-// }
-
-// const [authStore, setAuthStore] = createStore<AuthStore>({
-//   accessToken: null,
-// });
-
-// const authActions = {
-//   setAccessToken: (token: string | null) => {
-//     setAuthStore({ accessToken: token });
-//   },
-
-//   clearAuth: () => {
-//     setAuthStore({ accessToken: null });
-//   },
-
-//   isAuthenticated: () => !!authStore.accessToken,
-// };
-
-// export { authStore, authActions };
-
-
 import { createStore } from 'solid-js/store';
 
 interface AuthStore {
@@ -54,7 +29,7 @@ const authActions = {
     localStorage.removeItem('isAuthenticated');
   },
 
-  getIsAuthenticated: () => authStore.isAuthenticated,
+  getIsAuthenticated: () => localStorage.getItem('isAuthenticated') === 'true',
   
   getAccessToken: () => authStore.accessToken
 };
