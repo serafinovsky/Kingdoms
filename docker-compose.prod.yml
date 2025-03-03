@@ -6,6 +6,8 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
       - --entrypoints.websecure.address=:${EXTERNAL_PORT} # Для внешних запросов
       - --entrypoints.internal.address=:${INTERNAL_PORT} # Для внутрених
       - --api.dashboard=true
@@ -34,9 +36,11 @@ services:
     image: traefik/whoami
     labels:
       - traefik.enable=true
-      - traefik.http.routers.whoami.rule=Host(`kingdoms-game.ru`)
+      - traefik.http.routers.whoami.rule=Host(`whoami.kingdoms-game.ru`)
       - traefik.http.routers.whoami.entrypoints=websecure
       - traefik.http.routers.whoami.tls.certresolver=myresolver
+    networks:
+      - internal
 
   kingdoms-pg:
     container_name: kingdoms-pg
@@ -109,13 +113,13 @@ services:
       - traefik.http.middlewares.cors-allow-all.headers.accesscontrolallowcredentials=false
       - traefik.http.middlewares.cors-allow-all.headers.accesscontrolmaxage=86400
 
-      - traefik.http.routers.auth-web.rule=PathRegexp(`(?i)^/api/v\d+/auth`)
+      - traefik.http.routers.auth-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/auth`)
       - traefik.http.routers.auth-web.entrypoints=websecure
       - traefik.http.routers.auth-web.middlewares=cors-allow-all
       - traefik.http.routers.auth-web.service=auth-web
       - traefik.http.services.auth-web.loadbalancer.server.port=${AUTH_PORT}
 
-      - traefik.http.routers.users-web.rule=PathRegexp(`(?i)^/api/v\d+/users`)
+      - traefik.http.routers.users-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/users`)
       - traefik.http.routers.users-web.entrypoints=websecure
       - traefik.http.routers.users-web.service=users-web
       - traefik.http.routers.users-web.middlewares=auth-middleware,cors-allow-all
@@ -177,7 +181,7 @@ services:
       - "${CABINET_PORT}"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.cabinet-web.rule=PathRegexp(`(?i)^/api/v\d+/cabinet`)
+      - traefik.http.routers.cabinet-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/cabinet`)
       - traefik.http.routers.cabinet-web.entrypoints=websecure
       - traefik.http.routers.cabinet-web.middlewares=auth-middleware
       - traefik.http.routers.cabinet-web.service=cabinet-web
@@ -209,7 +213,7 @@ services:
       - "${ROOMS_PORT}"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.rooms-web.rule=PathPrefix(`/ws/rooms/`)
+      - traefik.http.routers.rooms-web.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/ws/rooms/`)
       - traefik.http.routers.rooms-web.entrypoints=websecure
       - traefik.http.routers.rooms-web.service=rooms-web
       - traefik.http.services.rooms-web.loadbalancer.server.port=${ROOMS_PORT}
@@ -238,7 +242,7 @@ services:
       - "${FRONT_PORT}"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.front-web.rule=PathPrefix(`/`)
+      - traefik.http.routers.front-web.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/`)
       - traefik.http.routers.front-web.entrypoints=websecure
       - traefik.http.services.front-web.loadbalancer.server.port=${FRONT_PORT}
     networks:
