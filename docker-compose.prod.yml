@@ -11,6 +11,8 @@ services:
       - --metrics.prometheus=true
       - --metrics.prometheus.addEntryPointsLabels=true
       - --metrics.prometheus.addServicesLabels=true
+      - --certificatesresolvers.myresolver.acme.email=m.serafinovsky@yandex.ru
+      - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
     ports:
       - 8080:8080 # Dashboard
       - ${EXTERNAL_PORT}:${EXTERNAL_PORT} # Внешний порт
@@ -19,9 +21,17 @@ services:
       - internal
       - external
     volumes:
+      - ./letsencrypt:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - kingdoms-auth
+
+  kingdoms-whoami:
+    image: traefik/whoami
+    labels:
+      - traefik.http.routers.whoami.rule=Host(`kingdoms-game.ru`)
+      - traefik.http.routers.whoami.entrypoints=web
+      - traefik.http.routers.whoami.tls.certresolver=myresolver
 
   kingdoms-pg:
     container_name: kingdoms-pg
