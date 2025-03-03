@@ -38,11 +38,11 @@ export default function Login() {
   };
 
   const handleGithubLogin = () => {
-    openAuthWindow('http://localhost:8889/api/v1/auth/github/authorize/');
+    openAuthWindow('https://kingdoms-game.ru/api/v1/auth/github/authorize/');
   };
   
   const handleYandexLogin = () => {
-    openAuthWindow('http://localhost:8889/api/v1/auth/yandex/authorize/');
+    openAuthWindow('https://kingdoms-game.ru/api/v1/auth/yandex/authorize/');
   };
 
   return (

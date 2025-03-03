@@ -65,7 +65,7 @@ export default function Room() {
       user_id: userStore.user.user_id.toString(),
       username: userStore.user.username,
     });
-    const ws = new WebSocket(`ws://127.0.0.1:8889/ws/rooms/${params.roomId}/?${getParams.toString()}`);
+    const ws = new WebSocket(`ws://kingdoms-game.ru/ws/rooms/${params.roomId}/?${getParams.toString()}`);
     
     ws.onopen = () => {
       console.log('WebSocket connected');
