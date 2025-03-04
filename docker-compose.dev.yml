@@ -9,6 +9,7 @@ services:
       - --entrypoints.web.address=:${EXTERNAL_PORT} # Для внешних запросов
       - --entrypoints.internal.address=:${INTERNAL_PORT} # Для внутрених
       - --api.dashboard=true
+      - --log.level=DEBUG
       - --metrics.prometheus=true
       - --metrics.prometheus.addEntryPointsLabels=true
       - --metrics.prometheus.addServicesLabels=true
@@ -158,8 +159,8 @@ services:
     working_dir: /opt/projects/app
     user: "${USER_ID}:${GROUP_ID}"
     volumes:
-      - "./services/auth/src:/opt/projects/app/"
-      - "./services/media/files:${AUTH_MEDIA_ROOT}"
+      - ./services/auth/src:/opt/projects/app/
+      - ./services/media/files:${AUTH_MEDIA_ROOT}
     command: "taskiq worker tasks:broker"
     depends_on:
       kingdoms-redis:

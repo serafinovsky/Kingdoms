@@ -6,6 +6,5 @@ export const COLORS = [
   '#DC2626', // red-600 
 ];
 
-export const DOMAIN = import.meta.env.DOMAIN;
-export const BASE_URL = `http://${DOMAIN}`;
-export const WS_URL = `ws://${DOMAIN}`;
+export const BASE_URL = import.meta.env.VITE_BASE_URL;
+export const BASE_WS_URL = import.meta.env.VITE_WS_BASE_URL;

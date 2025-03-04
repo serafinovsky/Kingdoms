@@ -16,7 +16,7 @@ interface QueueItem {
   reject: (error: unknown) => void;
 }
 
-const API_BASE_URL = 'https://kingdoms-game.ru';
+const API_BASE_URL = BASE_URL;
 const AUTH_ENDPOINTS = {
   refresh: `${API_BASE_URL}/api/v1/auth/token/refresh/`,
 };

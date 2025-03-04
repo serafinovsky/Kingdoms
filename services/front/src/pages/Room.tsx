@@ -14,6 +14,7 @@ import type { Player, CursorMove } from "../types/room"
 import type { PlayerData, GameStat } from "../types/map"
 import type { Cell } from "../types/map";
 import { PlayersMessage, AuthMessage, ChatMessage, ReadyMessage, UpdateMessage} from "../types/messages"
+import { BASE_WS_URL } from '../config';
 
 
 type Status = 'connecting' | 'config' | 'active' | 'error';
@@ -65,7 +66,7 @@ export default function Room() {
       user_id: userStore.user.user_id.toString(),
       username: userStore.user.username,
     });
-    const ws = new WebSocket(`ws://kingdoms-game.ru/ws/rooms/${params.roomId}/?${getParams.toString()}`);
+    const ws = new WebSocket(`${BASE_WS_URL}/ws/rooms/${params.roomId}/?${getParams.toString()}`);
     
     ws.onopen = () => {
       console.log('WebSocket connected');

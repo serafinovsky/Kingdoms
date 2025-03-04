@@ -2,8 +2,8 @@ import "../index.css";
 
 import { LoginGithubButton } from "../components/LoginGithubButton"
 import { LoginYandexButton } from "../components/LoginYandexButton"
-import { useNavigate } from "@solidjs/router"
 import { authActions } from '../stores/authStore';
+import { BASE_URL } from '../config';
 
 
 export default function Login() {
@@ -38,11 +38,11 @@ export default function Login() {
   };
 
   const handleGithubLogin = () => {
-    openAuthWindow('https://kingdoms-game.ru/api/v1/auth/github/authorize/');
+    openAuthWindow(`${BASE_URL}/api/v1/auth/github/authorize/`);
   };
   
   const handleYandexLogin = () => {
-    openAuthWindow('https://kingdoms-game.ru/api/v1/auth/yandex/authorize/');
+    openAuthWindow(`${BASE_URL}/api/v1/auth/yandex/authorize/`);
   };
 
   return (
