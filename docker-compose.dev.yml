@@ -10,6 +10,8 @@ services:
       - --entrypoints.internal.address=:${INTERNAL_PORT} # Для внутрених
       - --api.dashboard=true
       - --log.level=DEBUG
+      - --accesslog=true
+      - --accesslog.fields.headers.names.Authorization=keep
       - --metrics.prometheus=true
       - --metrics.prometheus.addEntryPointsLabels=true
       - --metrics.prometheus.addServicesLabels=true
@@ -18,8 +20,7 @@ services:
       - ${EXTERNAL_PORT}:${EXTERNAL_PORT} # Внешний порт
       - ${INTERNAL_PORT}:${INTERNAL_PORT} # Внутренний порт
     networks:
-      - internal
-      - external
+      - kingdoms-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -30,7 +31,7 @@ services:
     image: nginx:stable-alpine3.20
     env_file: ".env"
     networks:
-      - internal
+      - kingdoms-network
     volumes:
       - ./services/media/files:/srv/media:ro
       - ./services/media/dockerization/base.nginx.conf:/etc/nginx/nginx.base.conf:ro
@@ -55,7 +56,7 @@ services:
     expose:
       - ${PG_PORT}
     networks:
-      - internal
+      - kingdoms-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $AUTH_PG_USER -d $AUTH_PG_NAME"]
       interval: 10s
@@ -72,7 +73,7 @@ services:
     expose:
       - "${MONGO_PORT}"
     networks:
-      - internal
+      - kingdoms-network
     volumes:
       - mongodata:/data/db
       - ./services/cabinet/dockerization/initCabinet.js:/docker-entrypoint-initdb.d/cabinet.js:ro
@@ -88,7 +89,7 @@ services:
     expose:
       - ${REDIS_PORT}
     networks:
-      - internal
+      - kingdoms-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -132,8 +133,7 @@ services:
       - traefik.http.routers.auth-internal.middlewares=cors-allow-all
       - traefik.http.services.auth-internal.loadbalancer.server.port=${AUTH_PORT}
     networks:
-      - internal
-      - external
+      - kingdoms-network
     expose:
       - "${AUTH_PORT}"
     env_file: ".env"
@@ -168,8 +168,7 @@ services:
       kingdoms-pg:
         condition: service_healthy
     networks:
-      - internal
-      - external
+      - kingdoms-network
 
   kingdoms-cabinet:
     build:
@@ -193,7 +192,7 @@ services:
       - traefik.http.routers.cabinet-internal.service=cabinet-internal
       - traefik.http.services.cabinet-internal.loadbalancer.server.port=${CABINET_PORT}
     networks:
-      - internal
+      - kingdoms-network
     env_file: ".env"
     working_dir: /opt/projects/app
     volumes:
@@ -224,7 +223,7 @@ services:
       - traefik.http.routers.rooms-internal.service=rooms-internal
       - traefik.http.services.rooms-internal.loadbalancer.server.port=${ROOMS_PORT}
     networks:
-      - internal
+      - kingdoms-network
     env_file: ".env"
     working_dir: /opt/projects/app
     volumes:
@@ -247,7 +246,7 @@ services:
       - traefik.http.routers.front-web.entrypoints=web
       - traefik.http.services.front-web.loadbalancer.server.port=${FRONT_PORT}
     networks:
-      - internal
+      - kingdoms-network
     env_file: ".env"
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -265,8 +264,5 @@ volumes:
   mongodata:
 
 networks:
-  internal:
-    name: kingdoms-internal
-    internal: true
-  external:
-    name: kingdoms-external
+  kingdoms-network:
+    name: kingdoms-network

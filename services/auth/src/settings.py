@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppSettings(BaseSettings):
+    sentry_dsn: str = Field(validation_alias="sentry_dsn")
     pg_user: str
     pg_password: str
     pg_host: str = Field(validation_alias="pg_host")

@@ -103,12 +103,12 @@ class WaitingState(GameState):
 
     async def connect(self, player: "Player") -> None:
         await player.authenticate()
-        player.start_listening()
         async with self._lock:
             await self._take_slot(player)
             await self._take_color(player)
             self._room.register_player(player)
 
+        player.start_listening()
         await self._room.broadcast(self._players_message())
 
         async with self._game_start_condition:
@@ -267,18 +267,15 @@ class GameInProgressState(GameState):
 
         target_cell: Cell = self._room.game_map[new_r][new_c]
         target_cell_type = target_cell["type"]
-        target_cell_power = target_cell.get("power", 1)
+        target_cell_power = target_cell.get("power", 0)
         target_cell_player = target_cell.get("player")
         if target_cell_type == CellType.BLOCKER:
             return
 
         current_cell: Cell = self._room.game_map[r][c]
-        current_cell_power = current_cell.get("power", 1) - 1
-        if not current_cell_power or current_cell_power <= 1:
-            return
-
-        current_cell_player = current_cell.get("player")
-        if not current_cell_player or current_cell_player != player.id:
+        current_cell_power = current_cell.get("power", 0)
+        current_cell_player = current_cell.get("player", 0) - 1  # при переходе в клетке остается 1
+        if not current_cell_player or current_cell_player != player.id or current_cell_power <= 1:
             return
 
         if current_cell_player == target_cell_player:
@@ -302,7 +299,7 @@ class GameInProgressState(GameState):
             r, c = point
             if new_player:
                 self._room.players[new_player].hold.add(point)
-            if old_player:
+            if old_player and point in self._room.players[old_player].hold:
                 self._room.players[old_player].hold.remove(point)
         self._map_diff.clear()
 

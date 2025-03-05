@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppSettings(BaseSettings):
+    sentry_dsn: str = Field(validation_alias="sentry_dsn")
     mongo_dsn: MongoDsn
     debug: bool = Field(validation_alias="debug")
     mongo_db: str

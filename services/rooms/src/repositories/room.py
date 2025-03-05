@@ -5,23 +5,12 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app_types.map import MapAndMeta, Point
+from exceptions.room import RoomError, RoomNotFoundError
 from settings import settings
 from utils import make_room_key
 
 JsonType = str | int | float | bool | None | dict[str, Any] | list[Any]
 T = TypeVar("T")
-
-
-class RoomError(Exception):
-    """Base exception for room-related errors"""
-
-
-class RoomNotFoundError(RoomError):
-    """Raised when room is not found in Redis"""
-
-
-class RoomSerializationError(RoomError):
-    """Raised when room serialization/deserialization fails"""
 
 
 class MapAndMetaEncoder(json.JSONEncoder):
@@ -116,7 +105,7 @@ class RoomRepo:
             data = json.loads(raw_data, object_hook=map_and_meta_deserializer)
             return cast(MapAndMeta, data)
         except json.JSONDecodeError as e:
-            raise RoomSerializationError(f"Failed to deserialize room data: {e}") from e
+            raise RoomError(f"Failed to deserialize room data: {e}") from e
         except RedisError as e:
             raise RoomError(f"Redis error while loading room: {e}") from e
 

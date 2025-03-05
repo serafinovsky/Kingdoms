@@ -23,9 +23,9 @@ async def ws_room(
     redis: Annotated[Redis, Depends(get_redis_client)],
 ):
     room = player = None
-    room = await room_manager.get_or_create_room(redis, room_key)
     await websocket.accept()
     try:
+        room = await room_manager.get_or_create_room(redis, room_key)
         player = WebsocketPlayer(user_id, username, websocket)
         await room.connect(player)
         await room.play(player)
@@ -41,11 +41,22 @@ async def ws_room(
     except RoomNotFoundError:
         await websocket.close(code=4040, reason="Room not found")
     except Exception as e:
-        logger.error("Something wrong", exc_info=e, stack_info=True)
-        await websocket.close(code=4100, reason="Something wrong")
+        logger.error(
+            "Unexpected error",
+            extra={
+                "room_key": room_key,
+                "user_id": user_id,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "error_module": type(e).__module__,
+            },
+            exc_info=True,
+            stack_info=True,
+        )
+        await websocket.close(code=4999, reason="Something wrong")
     finally:
-        if player:
+        if player and room:
             await room.disconnect(player)
             await player.stop_listening()
-        if room.need_cleanup() and len(room.players.values()) == 0:
+        if room and room.need_cleanup() and len(room.players.values()) == 0:
             await room_manager.cleanup_room(redis, room_key)
