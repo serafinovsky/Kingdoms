@@ -5,7 +5,7 @@ from redis.asyncio import Redis
 
 from dependencies.store import get_redis_client
 from exceptions.player import PlayerTokenIsNotValid, PlayerWrongAuthFlow
-from exceptions.room import RoomInGameError, RoomNoSlots, RoomNotFoundError
+from exceptions.room import RoomInGameError, RoomNoSlots, RoomNotFoundError, RoomWrongReplica
 from logger import get_logger
 from services.player import WebsocketPlayer
 from services.room import room_manager
@@ -26,10 +26,13 @@ async def ws_room(
     await websocket.accept()
     try:
         room = await room_manager.get_or_create_room(redis, room_key)
-        player = WebsocketPlayer(user_id, username, websocket)
+        player = WebsocketPlayer(user_id, username, room.dimension, websocket)
         await room.connect(player)
         await room.play(player)
         await room.after_play(player)
+    except RoomWrongReplica:
+        logger.info("Wrong replica", extra={"room_key": room_key, "user_id": user_id})
+        await websocket.close(code=1008, reason="Wrong replica")
     except RoomNoSlots:
         await websocket.close(code=4010, reason="There is not slots")
     except RoomInGameError:

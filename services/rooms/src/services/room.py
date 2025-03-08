@@ -11,9 +11,15 @@ from app_types.common import GameStatus, PlayerStatus
 from app_types.map import Cell, CellType, GameMap, MapAndMeta, MapMeta, Point
 from app_types.messages import InMessage, OutMessage
 from app_types.out_messages import GameStat, PlayerData, PlayersMessage, StartMessage, UpdateMessage
-from exceptions.room import RoomInGameError, RoomNoSlots, RoomNotFoundError, RoomNotReadyError
+from exceptions.room import (
+    RoomInGameError,
+    RoomNoSlots,
+    RoomNotFoundError,
+    RoomNotReadyError,
+    RoomWrongReplica,
+)
 from logger import get_logger
-from repositories.room import room_repo
+from repositories.room import room_repo, sharding_repo
 from services.player import Player
 from settings import settings
 
@@ -23,27 +29,31 @@ logger = get_logger(__name__)
 class RoomManager:
     def __init__(self) -> None:
         self.rooms: dict[str, "GameRoom"] = {}
-        self.lock = asyncio.Lock()
 
     async def init_room(self, redis: Redis, map_and_meta: MapAndMeta) -> str:
         room_key = await room_repo.save_room(redis, map_and_meta)
         return room_key
 
     async def get_or_create_room(self, redis: Redis, room_key: str) -> "GameRoom":
-        async with self.lock:
-            if room_key in self.rooms:
-                return self.rooms[room_key]
+        replica = await sharding_repo.get_room_replica(redis, room_key)
+        if replica and replica != settings.replica_id:
+            raise RoomWrongReplica()
 
-            map_and_meta = await room_repo.load_room(redis, room_key)
-            if not map_and_meta:
-                raise RoomNotFoundError()
-            game_map, meta = map_and_meta["map"], map_and_meta["meta"]
-            game_room = GameRoom(room_key, game_map, meta)
-            self.rooms[room_key] = game_room
-            return game_room
+        if room_key in self.rooms:
+            return self.rooms[room_key]
+
+        map_and_meta = await room_repo.load_room(redis, room_key)
+        if not map_and_meta:
+            raise RoomNotFoundError()
+        game_map, meta = map_and_meta["map"], map_and_meta["meta"]
+        game_room = GameRoom(room_key, game_map, meta)
+        self.rooms[room_key] = game_room
+        await sharding_repo.set_room_replica(redis, room_key)
+        return game_room
 
     async def cleanup_room(self, redis: Redis, room_key: str) -> None:
         await room_repo.remove_room(redis, room_key)
+        await sharding_repo.remove_room_replica(redis, room_key)
         if room_key in self.rooms:
             del self.rooms[room_key]
 
@@ -216,7 +226,6 @@ class GameInProgressState(GameState):
 
     async def play(self, player: "Player") -> None:
         await self._room.broadcast(StartMessage(at="start"))
-        player.pov = [[{"type": CellType.HIDE} for _ in row] for row in self._room.game_map]
         self._start_loop.set()
         try:
             await self._game_loop_task
@@ -236,8 +245,10 @@ class GameInProgressState(GameState):
             self._current_turn += 1
             start = time.perf_counter()
             self._make_turn()
+            print("_make_turn", time.perf_counter() - start)
             await self._room.broadcast(self._update_message)
             elapsed = time.perf_counter() - start
+            print("_make_turn + send", elapsed)
             await asyncio.sleep(max(0.7 - elapsed, 0))
         self._make_turn()
         await self._room.broadcast(self._update_message)
@@ -248,11 +259,17 @@ class GameInProgressState(GameState):
     def _make_turn(self):
         self._update_map()
         for player in self._room.players.values():
+            start = time.perf_counter()
             self._process_player_move(player)
+            print(f"{player}: _process_player_move", time.perf_counter() - start)
+        start = time.perf_counter()
         self._update_players_hold()
+        print("_update_players_hold", time.perf_counter() - start)
 
         for player in self._room.players.values():
+            start = time.perf_counter()
             self._update_pov(player)
+            print(f"{player}: _update_pov", time.perf_counter() - start)
 
     def _process_player_move(self, player: "Player") -> None:
         move_points = player.get_move_points()
@@ -298,9 +315,9 @@ class GameInProgressState(GameState):
         for point, (old_player, new_player) in self._map_diff.items():
             r, c = point
             if new_player:
-                self._room.players[new_player].hold.add(point)
+                self._room.players[new_player].territory.add_point(point)
             if old_player and point in self._room.players[old_player].hold:
-                self._room.players[old_player].hold.remove(point)
+                self._room.players[old_player].territory.remove_point(point)
         self._map_diff.clear()
 
         for player in self._room.players.values():
@@ -313,8 +330,7 @@ class GameInProgressState(GameState):
                 for point in player.hold:
                     r, c = point
                     self._room.game_map[r][c]["player"] = fact_player
-                self._room.players[fact_player].hold |= player.hold
-                player.set_lose()
+                self._room.players[fact_player].takeover_kingdom(player)
 
     def _update_map(self) -> None:
         for point in chain.from_iterable(p.hold for p in self._room.players.values()):
@@ -334,9 +350,6 @@ class GameInProgressState(GameState):
         diff = player.update_visible_cells()
         for point in diff:
             r, c = point
-            if not self._is_valid_position(r, c):
-                continue
-
             pov_cell = player.pov[r][c]
             pov_cell["type"] = CellType.HIDE
             if "player" in pov_cell:
@@ -346,8 +359,6 @@ class GameInProgressState(GameState):
 
         for point in player.visible_points:
             r, c = point
-            if not self._is_valid_position(r, c):
-                continue
             map_cell = self._room.game_map[r][c]
             pov_cell = player.pov[r][c]
             pov_cell["type"] = map_cell["type"]
@@ -368,7 +379,7 @@ class GameInProgressState(GameState):
                 PlayerData(
                     id=player.id, username=player.nick, color=player.color, status=player.status
                 ),
-                GameStat(fields=len(player.hold), power=player.power),
+                GameStat(fields=player.territory.count(), power=player.power),
             ),
         )
 
@@ -406,6 +417,10 @@ class GameRoom:
         self.game_map: GameMap = self.prepare_map(game_map)
         self.meta: MapMeta = meta
         self.slots: list[Point] = meta["points_of_interest"].get(CellType.SPAWN, [])
+
+    @property
+    def dimension(self) -> tuple[int, int]:
+        return len(self.game_map), len(self.game_map[0])
 
     def prepare_map(self, game_map: GameMap) -> GameMap:
         for row in game_map:

@@ -125,4 +125,55 @@ class RoomRepo:
             raise RoomError(f"Failed to remove room: {e}") from e
 
 
+class ShardingRepo:
+    def __init__(self) -> None:
+        self._shard_prefix: str = "__shard:rooms:"
+
+    def _make_key(self, room_key: str) -> str:
+        return f"{self._shard_prefix}{room_key}"
+
+    async def get_room_replica(self, redis: Redis, room_key: str) -> str | None:
+        """Get replica ID where room is located
+
+        Args:
+            redis: Redis connection instance
+            room_key: Room identifier
+
+        Returns:
+            Optional[str]: Replica ID or None if not found
+
+        Raises:
+            RoomError: If Redis operation fails
+        """
+        replica_id = await redis.get(self._make_key(room_key))
+        return replica_id
+
+    async def set_room_replica(self, redis: Redis, room_key: str) -> None:
+        """Set replica ID for room
+
+        Args:
+            redis: Redis connection instance
+            room_key: Room identifier
+            replica_id: Replica identifier
+            ttl: Time to live in seconds
+
+        Raises:
+            RoomError: If Redis operation fails
+        """
+        await redis.setex(self._make_key(room_key), settings.room_ttl, settings.replica_id)
+
+    async def remove_room_replica(self, redis: Redis, room_key: str) -> None:
+        """Remove room's replica mapping
+
+        Args:
+            redis: Redis connection instance
+            room_key: Room identifier
+
+        Raises:
+            RoomError: If Redis operation fails
+        """
+        await redis.delete(self._make_key(room_key))
+
+
+sharding_repo = ShardingRepo()
 room_repo = RoomRepo()

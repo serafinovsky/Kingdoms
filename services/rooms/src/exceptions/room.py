@@ -20,3 +20,7 @@ class RoomInGameError(RoomError):
 
 class RoomNoSlots(RoomError):
     """No slots in room"""
+
+
+class RoomWrongReplica(RoomError):
+    """Wrong replica id"""
