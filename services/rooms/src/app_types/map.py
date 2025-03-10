@@ -4,7 +4,6 @@ from typing import Literal, NamedTuple, NotRequired, TypedDict
 
 class CellType(StrEnum):
     SPAWN = "spawn"
-    HIDE = "hide"
     KING = "king"
     BLOCKER = "block"
     FIELD = "field"
@@ -12,7 +11,7 @@ class CellType(StrEnum):
 
 
 class Cell(TypedDict):
-    type: CellType
+    type: NotRequired[CellType]
     player: NotRequired[int]
     power: NotRequired[int]
 

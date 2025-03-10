@@ -27,9 +27,7 @@ async def ws_room(
     try:
         room = await room_manager.get_or_create_room(redis, room_key)
         player = WebsocketPlayer(user_id, username, room.dimension, websocket)
-        await room.connect(player)
-        await room.play(player)
-        await room.after_play(player)
+        await room_manager.play_with_room(redis, room, player)
     except RoomWrongReplica:
         logger.info("Wrong replica", extra={"room_key": room_key, "user_id": user_id})
         await websocket.close(code=1008, reason="Wrong replica")
@@ -58,8 +56,4 @@ async def ws_room(
         )
         await websocket.close(code=4999, reason="Something wrong")
     finally:
-        if player and room:
-            await room.disconnect(player)
-            await player.stop_listening()
-        if room and room.need_cleanup() and len(room.players.values()) == 0:
-            await room_manager.cleanup_room(redis, room_key)
+        await room_manager.cleanup_room(redis, room, player)

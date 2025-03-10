@@ -1,5 +1,6 @@
 import "../index.css";
 
+import { useSearchParams } from "@solidjs/router";
 import { LoginGithubButton } from "../components/LoginGithubButton"
 import { LoginYandexButton } from "../components/LoginYandexButton"
 import { authActions } from '../stores/authStore';
@@ -7,6 +8,7 @@ import { BASE_URL } from '../config';
 
 
 export default function Login() {
+  const [searchParams] = useSearchParams();
   const openAuthWindow = (url: string) => {
     authActions.clearAuth();
     const width = 600;
@@ -27,7 +29,8 @@ export default function Login() {
             clearInterval(checkAuth);
             const isAuthenticated = authActions.getIsAuthenticated();
             if (isAuthenticated) {
-              window.location.href = '/';
+              const redirectTo = searchParams.redirect_to;
+              window.location.href = redirectTo || '/';
             }
           }
         } catch (e) {

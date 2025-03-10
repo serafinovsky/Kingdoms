@@ -4,10 +4,49 @@ import { FieldIcon } from "./FieldIcon";
 import { CastleIcon } from "./CastleIcon";
 import { COLORS } from '../config';
 import type { Cell } from "../types/map";
+import { CellType } from "../types/map";
 import type { Player, Cursor, CursorMove } from "../types/room"
 
 
+type Direction = 'up' | 'down' | 'left' | 'right';
+type CellCoord = `${number},${number}`;
 
+const DirectionArrow: Component<{ direction: Direction }> = (props) => {
+  const position = createMemo(() => {
+    switch (props.direction) {
+      case 'up': return 'top-0';
+      case 'down': return 'bottom-0';
+      case 'left': return 'left-0';
+      case 'right': return 'right-0';
+      default: return '';
+    }
+  });
+
+  const rotation = createMemo(() => {
+    switch (props.direction) {
+      case 'up': return '-rotate-90';
+      case 'down': return 'rotate-90';
+      case 'left': return 'rotate-180';
+      default: return '';
+    }
+  });
+
+  return (
+    <svg
+      class={`w-4 h-4 text-sky-500 absolute ${rotation()} ${position()}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M14 5l7 7m0 0l-7 7m7-7H3"
+      />
+    </svg>
+  );
+};
 
 const GameCell: Component<{
   cell: Cell;
@@ -16,10 +55,11 @@ const GameCell: Component<{
   isSelected: boolean;
   isPlayerCell: boolean;
   color: string;
+  directions: Direction[];
   onClick: () => void;
 }> = (props) => {
-  const cellClass = createMemo(() => `rounded-sm bg-white/90 
-    ${props.isSelected ? 'ring-2 ring-sky-500 shadow-lg' : ''} 
+  const cellClass = createMemo(() => `rounded-sm bg-white/90 relative
+    ${props.isSelected ? 'ring-2 ring-stone-950 shadow-lg' : ''} 
     ${props.isPlayerCell ? 'hover:ring-2 hover:ring-emerald-500 hover:shadow-lg' : ''}
     w-8 h-8
     ${props.isPlayerCell ? 'cursor-pointer' : 'cursor-default'}`
@@ -36,41 +76,65 @@ const GameCell: Component<{
   return (
     <td onClick={props.onClick} class={cellClass()}>
       {CellIcon()}
+      <div class="absolute inset-0 flex items-center justify-center">
+        <For each={props.directions}>
+          {(direction) => <DirectionArrow direction={direction} />}
+        </For>
+      </div>
     </td>
   );
 };
 
-const ColumnHeader: Component<{
-  index: number;
-  getLabel: (index: number) => string;
-  coordinateClass: string;
-}> = (props) => (
-  <th class={props.coordinateClass}>
-    {props.getLabel(props.index)}
-  </th>
-);
-
-const RowHeader: Component<{
-  index: number;
-  coordinateClass: string;
-}> = (props) => (
-  <td class={props.coordinateClass}>
-    {props.index + 1}
-  </td>
-);
 
 type GameBoardProps = {
   data: Cell[][];
   players: Player[];
   currentUserId: number;
-  initialCursor: Cursor;
+  gameCursor: Cursor | undefined;
+  previousCursor: Cursor | undefined;
   onCellClick: (rowIndex: number, colIndex: number, cell: Cell) => void;
   onCursorMove: (move: CursorMove) => void;
 };
 
 export const GameBoard: Component<GameBoardProps> = (props) => {
-  const [cursor, setCursor] = createSignal<Cursor>(props.initialCursor);
+  const findKingPosition = (): Cursor => {
+    for (let row = 0; row < props.data.length; row++) {
+      for (let col = 0; col < props.data[row].length; col++) {
+        const cell = props.data[row][col];
+        if (cell.type === CellType.KING && cell.player === props.currentUserId) {
+          return { row, col };
+        }
+      }
+    }
+    return { row: 0, col: 0 };
+  };
 
+  const [cursor, setCursor] = createSignal<Cursor>(findKingPosition());
+  const [directions, setDirections] = createSignal<Map<CellCoord, Direction[]>>(new Map());
+
+  const getDirection = (from: Cursor, to: Cursor): Direction | null => {
+    if (from.row > to.row) return 'up';
+    if (from.row < to.row) return 'down';
+    if (from.col > to.col) return 'left';
+    if (from.col < to.col) return 'right';
+    return null;
+  };
+
+  const getCellDirections = (rowIndex: number, colIndex: number) => {
+    const key: CellCoord = `${rowIndex},${colIndex}`;
+    return directions().get(key) || [];
+  };
+
+  const addDirection = (coord: CellCoord, direction: Direction) => {
+    setDirections(prev => {
+      const next = new Map(prev);
+      const current = next.get(coord) || [];
+      if (!current.includes(direction)) {
+        next.set(coord, [...current, direction]);
+      }
+      return next;
+    });
+  };
   const playerColors = createMemo(() => 
     new Map(props.players.map(p => [p.id, COLORS[p.color]]))
   );
@@ -79,7 +143,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     if (cell.player !== undefined) {
       return playerColors().get(cell.player) ?? '#d4d4d8';
     }
-    return cell.type === 'hide' ? '#f4f4f5' : 
+    return cell.type === undefined ? '#f4f4f5' : 
            cell.type === 'block' ? '#71717a' : '#d4d4d8';
   });
 
@@ -93,11 +157,25 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     return current?.row === row && current?.col === col;
   });
 
-  const moveCursor = (newCursor: Cursor) => {
+  const moveCursor = (newCursor: Cursor, resetCursor: boolean) => {
     batch(() => {
+      if (resetCursor) {
+        setDirections(new Map());
+        props.onCursorMove?.({});
+        return;
+      }
+
       const previousCursor = { ...cursor() };
-      setCursor(newCursor);
-      props.onCursorMove?.({ previous: previousCursor, current: newCursor });
+      if (previousCursor.row !== newCursor.row || previousCursor.col !== newCursor.col) {
+        const direction = getDirection(previousCursor, newCursor);
+        if (direction) {
+          const coord: CellCoord = `${previousCursor.row},${previousCursor.col}`;
+          addDirection(coord, direction);
+        }
+
+        setCursor(newCursor);
+        props.onCursorMove?.({ previous: previousCursor, current: newCursor });
+      }
     });
   };
 
@@ -114,6 +192,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     const current = cursor()!;
 
     let newCursor = { ...current };
+    let resetCursor = false
     switch (e.key) {
       case 'ArrowUp':
         if (current.row > 0) newCursor.row--;
@@ -127,13 +206,16 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
       case 'ArrowRight':
         if (current.col < props.data[0].length - 1) newCursor.col++;
         break;
+      case 'Escape':
+        resetCursor = true;
+        break
       default:
         return;
     }
 
-    if (newCursor.row !== current.row || newCursor.col !== current.col) {
+    if (newCursor.row !== current.row || newCursor.col !== current.col || resetCursor) {
       e.preventDefault();
-      moveCursor(newCursor);
+      moveCursor(newCursor, resetCursor);
     }
   });
 
@@ -143,17 +225,29 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     onCleanup(() => window.removeEventListener('keydown', handler));
   });
 
-  const getColumnLabel = (index: number) => String.fromCharCode(65 + index);
-
-  const getCoordinateClass = createMemo(() => (index: number, type: 'row' | 'col') => {
-    const current = cursor();
-    const isHighlighted = current && (
-      type === 'row' ? current.row === index : current.col === index
-    );
-    
-    return `w-6 h-6 text-sm font-medium ${
-      isHighlighted ? 'text-sky-600/90 scale-110' : 'text-gray-500/80'
-    }`;
+  createEffect(() => {
+    if (props.gameCursor === undefined && directions().size > 0) {
+      setDirections(new Map());
+    }
+    if (props.previousCursor) {
+      const coord: CellCoord = `${props.previousCursor.row},${props.previousCursor.col}`;
+      const currentDirections = directions().get(coord) || [];
+      
+      if (currentDirections.length > 0) {
+        setDirections(prev => {
+          const next = new Map(prev);
+          const remaining = currentDirections.slice(1);
+          
+          if (remaining.length === 0) {
+            next.delete(coord);
+          } else {
+            next.set(coord, remaining);
+          }
+          
+          return next;
+        });
+      }
+    }
   });
 
   const tableClass = createMemo(() => 
@@ -165,28 +259,10 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     <div class="p-4 w-full" tabIndex={0}>
       <div class="flex justify-center">
         <table class={tableClass()}>
-          <thead>
-            <tr>
-              <th class="w-6 h-6" />
-              <Index each={props.data[0]}>
-                {(_, colIndex) => (
-                  <ColumnHeader
-                    index={colIndex}
-                    getLabel={getColumnLabel}
-                    coordinateClass={getCoordinateClass()(colIndex, 'col')}
-                  />
-                )}
-              </Index>
-            </tr>
-          </thead>
           <tbody>
             <Index each={props.data}>
               {(row, rowIndex) => (
                 <tr>
-                  <RowHeader
-                    index={rowIndex}
-                    coordinateClass={getCoordinateClass()(rowIndex, 'row')}
-                  />
                   <Index each={row()}>
                     {(cell, colIndex) => (
                       <GameCell
@@ -196,6 +272,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
                         isSelected={isCursorAt()(rowIndex, colIndex)}
                         isPlayerCell={isPlayerCell()(cell())}
                         color={getColor()(cell())}
+                        directions={getCellDirections(rowIndex, colIndex)}
                         onClick={createCellClickHandler(rowIndex, colIndex, cell())()}
                       />
                     )}

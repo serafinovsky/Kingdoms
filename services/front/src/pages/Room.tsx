@@ -1,5 +1,5 @@
 import { useParams } from "@solidjs/router";
-import { createSignal, createEffect, onCleanup } from "solid-js";
+import { createSignal, createEffect, onCleanup, batch } from "solid-js";
 import { authActions } from "../stores/authStore";
 import { userStore } from "../stores/userStore";
 import { Chat } from "../components/Chat";
@@ -10,7 +10,8 @@ import { ErrorMessage } from "../components/ErrorMessage";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { GameBoard } from "../components/GameBoard";
 import { GameStats } from "../components/GameStats";
-import type { Player, CursorMove } from "../types/room";
+import { TutorialPopup } from "../components/TutorialPopup";
+import type { Player, CursorMove, Cursor } from "../types/room";
 import type { PlayerData, GameStat } from "../types/map";
 import type { Cell, GameMap } from "../types/map";
 import {
@@ -23,13 +24,6 @@ import {
 import { BASE_WS_URL } from "../config";
 
 type Status = "connecting" | "config" | "active" | "error";
-type WebSocketErrorCode = 
-  | 4010  // No slots
-  | 4020  // Game in progress
-  | 4030  // Auth error
-  | 4031  // Auth flow error
-  | 4040  // Room not found
-  | 5000; // Server error
 
 const getWebSocketErrorMessage = (code: number): string => {
   switch (code) {
@@ -72,13 +66,16 @@ export default function Room() {
   const params = useParams();
   const [status, setStatus] = createSignal<Status>("connecting");
   const [players, setPlayers] = createSignal<Player[]>([]);
-  const [data, setData] = createSignal<GameMap>([[]]);
+  const [data, setData] = createSignal<GameMap | undefined>(undefined);
   const [socket, setSocket] = createSignal<WebSocket | null>(null);
   const [messages, setMessages] = createSignal<ChatLine[]>([]);
   const [selectedColors, setSelectedColors] = createSignal<number[]>([]);
   const [turn, setTurn] = createSignal(0);
   const [stats, setStats] = createSignal<[PlayerData, GameStat][]>([]);
+  const [currentCursor, setCurrentCursor] = createSignal<Cursor | undefined>();
+  const [previousCursor, setPreviousCursor] = createSignal<Cursor | undefined>();
   const [errorMessage, setErrorMessage] = createSignal("Что-то пошло не так");
+  const [showTutorial, setShowTutorial] = createSignal(!localStorage.getItem('kingdomsTutorialSeen'));
 
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 10;
@@ -136,9 +133,13 @@ export default function Room() {
 
       if (data.at === "update") {
         const updateMessage = data as UpdateMessage;
-        setData(data.map);
-        setTurn(updateMessage.turn);
-        setStats([updateMessage.stat]);
+        batch(() => {
+          setData(updateMessage.map);          
+          setTurn(updateMessage.turn);         
+          setStats([updateMessage.stat]);      
+          setCurrentCursor(updateMessage.cursor);
+          setPreviousCursor(updateMessage.prev_cursor);
+        });
       }
 
       if (data.at === "chat") {
@@ -163,8 +164,6 @@ export default function Room() {
     };
 
     ws.onclose = (event) => {
-      console.log("WebSocket closed:", event);
-
       if (event.code === 1008) {
         if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           console.log(
@@ -193,7 +192,6 @@ export default function Room() {
     onCleanup(() => {
       if (ws) {
         ws.close();
-        console.log("WebSocket закрыт при cleanup");
       }
     });
   });
@@ -256,17 +254,21 @@ export default function Room() {
             selectedIndices={selectedColors()}
             onColorSelect={handleColorSelect}
           />
+          {showTutorial() && (
+            <TutorialPopup onClose={() => setShowTutorial(false)} />
+          )}
         </div>
       )}
 
-      {status() === "active" && (
+      {status() === "active" && data() !== undefined && (
         <div class="flex flex-col items-center gap-8">
           <GameStats turn={turn()} stats={stats()} />
           <GameBoard
             data={data()}
             players={players()}
             currentUserId={userStore.user.user_id}
-            initialCursor={{ row: 0, col: 0 }}
+            gameCursor={currentCursor()}
+            previousCursor={previousCursor()}
             onCellClick={handleCellClick}
             onCursorMove={handleCursorMove}
           />

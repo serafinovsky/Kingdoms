@@ -1,10 +1,12 @@
 import json
+import time
 from typing import Any, TypeVar, cast
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app_types.map import MapAndMeta, Point
+from app_types.room import LobbyRoom
 from exceptions.room import RoomError, RoomNotFoundError
 from settings import settings
 from utils import make_room_key
@@ -175,5 +177,58 @@ class ShardingRepo:
         await redis.delete(self._make_key(room_key))
 
 
+class LobbyRepository:
+    def __init__(self):
+        self._lobby_key = "lobby:rooms"
+        self._room_prefix = "lobby:room:"
+
+    def _make_room_key(self, room_id: str) -> str:
+        return f"{self._room_prefix}{room_id}"
+
+    async def add_room(self, redis: Redis, max_players: int, room_key: str) -> None:
+        """Add room to lobby with initial data"""
+        room_data = {"name": room_key, "max_players": max_players, "current_players": 0}
+        async with redis.pipeline(transaction=True) as pipe:
+            await pipe.hset(self._make_room_key(room_key), mapping=room_data)
+            await pipe.zadd(self._lobby_key, {room_key: time.time()})
+            await pipe.execute()
+
+    async def add_players(self, redis: Redis, room_id: str) -> None:
+        await redis.hincrby(self._make_room_key(room_id), "current_players", 1)
+
+    async def remove_player(self, redis: Redis, room_id: str) -> None:
+        await redis.hincrby(self._make_room_key(room_id), "current_players", -1)
+
+    async def get_rooms(
+        self,
+        redis: Redis,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> list[LobbyRoom]:
+        room_ids = await redis.zrange(
+            self._lobby_key, start=offset, end=offset + limit - 1, desc=True
+        )
+
+        rooms = []
+        for room_id in room_ids:
+            room_data = await redis.hgetall(self._make_room_key(room_id))
+            if room_data:
+                rooms.append(
+                    LobbyRoom(
+                        name=room_data["name"],
+                        max_players=int(room_data["max_players"]),
+                        current_players=int(room_data["current_players"]),
+                    )
+                )
+        return rooms
+
+    async def remove_room(self, redis: Redis, room_id: str) -> None:
+        async with redis.pipeline(transaction=True) as pipe:
+            await pipe.delete(self._make_room_key(room_id))
+            await pipe.zrem(self._lobby_key, room_id)
+            await pipe.execute()
+
+
+lobby_repo = LobbyRepository()
 sharding_repo = ShardingRepo()
 room_repo = RoomRepo()

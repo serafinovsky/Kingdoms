@@ -4,6 +4,7 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
+from prometheus_client import make_asgi_app
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from logger import logging
@@ -54,3 +55,4 @@ app.add_middleware(
 
 app.include_router(ws_router)
 app.include_router(api_router)
+app.mount("/metrics", make_asgi_app())

@@ -667,6 +667,20 @@ files = [
 ptyprocess = ">=0.5"
 
 [[package]]
+name = "prometheus-client"
+version = "0.21.1"
+description = "Python client for the Prometheus monitoring system."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "prometheus_client-0.21.1-py3-none-any.whl", hash = "sha256:594b45c410d6f4f8888940fe80b5cc2521b305a1fafe1c58609ef715a001f301"},
+    {file = "prometheus_client-0.21.1.tar.gz", hash = "sha256:252505a722ac04b0456be05c05f75f45d760c2911ffc45f2a06bcaed9f3ae3fb"},
+]
+
+[package.extras]
+twisted = ["twisted"]
+
+[[package]]
 name = "prompt-toolkit"
 version = "3.0.50"
 description = "Library for building powerful interactive command lines in Python"
@@ -1416,4 +1430,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "571c5b2e0e134519f3f4d0162ecd98fc38cdcb365656855b7a824a17cad56fe7"
+content-hash = "dab0c12253e2ce23980d62378ae77c2624a4b87ab3e61e5cc869c30cf27e01bc"

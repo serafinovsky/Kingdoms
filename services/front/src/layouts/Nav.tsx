@@ -1,5 +1,5 @@
 import { createSignal, Show, JSX, onMount } from "solid-js";
-import { useNavigate } from "@solidjs/router";
+import { useNavigate, useLocation } from "@solidjs/router";
 import { authActions } from "../stores/authStore";
 import { setUserStore } from "../stores/userStore";
 import { UserMenu } from "../components/UserMenu";
@@ -35,7 +35,12 @@ const Layout = (props: LayoutProps) => {
       setUserStore({user: response.data})
     } catch (error) {
       authActions.clearAuth();
-      navigate("/login");
+      alert(1, location.pathname)
+      if (location.pathname !== '/login') {
+        navigate(`/login?redirect_to=${encodeURIComponent(location.pathname)}`);
+      } else {
+        navigate('/login');
+      }
     } finally {
       setIsLoading(false);
     }

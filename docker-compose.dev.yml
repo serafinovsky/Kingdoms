@@ -6,7 +6,7 @@ services:
       - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:${EXTERNAL_PORT} # Для внешних запросов
+      - --entrypoints.external.address=:${EXTERNAL_PORT} # Для внешних запросов
       - --entrypoints.internal.address=:${INTERNAL_PORT} # Для внутрених
       - --api.dashboard=true
       - --log.level=DEBUG
@@ -40,7 +40,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.media-web.rule=PathPrefix(`/media`)
-      - traefik.http.routers.media-web.entrypoints=web
+      - traefik.http.routers.media-web.entrypoints=external
       - traefik.http.routers.media-web.service=media-web
       - traefik.http.services.media-web.loadbalancer.server.port=${MEDIA_PORT}
 
@@ -116,13 +116,13 @@ services:
       - traefik.http.middlewares.cors-allow-all.headers.accesscontrolmaxage=86400
 
       - traefik.http.routers.auth-web.rule=PathRegexp(`(?i)^/api/v\d+/auth`)
-      - traefik.http.routers.auth-web.entrypoints=web
+      - traefik.http.routers.auth-web.entrypoints=external
       - traefik.http.routers.auth-web.middlewares=cors-allow-all
       - traefik.http.routers.auth-web.service=auth-web
       - traefik.http.services.auth-web.loadbalancer.server.port=${AUTH_PORT}
 
       - traefik.http.routers.users-web.rule=PathRegexp(`(?i)^/api/v\d+/users`)
-      - traefik.http.routers.users-web.entrypoints=web
+      - traefik.http.routers.users-web.entrypoints=external
       - traefik.http.routers.users-web.service=users-web
       - traefik.http.routers.users-web.middlewares=auth-middleware,cors-allow-all
       - traefik.http.services.users-web.loadbalancer.server.port=${AUTH_PORT}
@@ -182,7 +182,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.cabinet-web.rule=PathRegexp(`(?i)^/api/v\d+/cabinet`)
-      - traefik.http.routers.cabinet-web.entrypoints=web
+      - traefik.http.routers.cabinet-web.entrypoints=external
       - traefik.http.routers.cabinet-web.middlewares=auth-middleware
       - traefik.http.routers.cabinet-web.service=cabinet-web
       - traefik.http.services.cabinet-web.loadbalancer.server.port=${CABINET_PORT}
@@ -213,9 +213,15 @@ services:
       - "${ROOMS_PORT}"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.rooms-web.rule=PathPrefix(`/ws/rooms/`)
-      - traefik.http.routers.rooms-web.entrypoints=web
+      - traefik.http.routers.rooms-ws.rule=PathPrefix(`/ws/rooms/`)
+      - traefik.http.routers.rooms-ws.entrypoints=external
+      - traefik.http.routers.rooms-ws.service=rooms-ws
+      - traefik.http.services.rooms-ws.loadbalancer.server.port=${ROOMS_PORT}
+
+      - traefik.http.routers.rooms-web.rule=PathRegexp(`(?i)^/api/v\d+/rooms`)
+      - traefik.http.routers.rooms-web.entrypoints=external
       - traefik.http.routers.rooms-web.service=rooms-web
+      - traefik.http.routers.rooms-web.middlewares=auth-middleware
       - traefik.http.services.rooms-web.loadbalancer.server.port=${ROOMS_PORT}
 
       - traefik.http.routers.rooms-internal.rule=PathRegexp(`(?i)^/api/v\d+/rooms`)
@@ -243,7 +249,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.front-web.rule=PathPrefix(`/`)
-      - traefik.http.routers.front-web.entrypoints=web
+      - traefik.http.routers.front-web.entrypoints=external
       - traefik.http.services.front-web.loadbalancer.server.port=${FRONT_PORT}
     networks:
       - kingdoms-network
@@ -254,12 +260,11 @@ services:
     working_dir: /opt/projects/front/
     volumes:
       - "./services/front/:/opt/projects/front/"
-    command: "npm run dev -- --host"
+    command: "npm run dev -- --host --port ${FRONT_PORT}"
     depends_on:
       - kingdoms-auth
 
 volumes:
-  shared-media:
   pgdata:
   mongodata:
 

@@ -3,7 +3,7 @@ import random
 import time
 from abc import ABC, abstractmethod
 from itertools import chain
-from typing import Callable
+from typing import Callable, Optional
 
 from redis.asyncio import Redis
 
@@ -19,9 +19,11 @@ from exceptions.room import (
     RoomWrongReplica,
 )
 from logger import get_logger
-from repositories.room import room_repo, sharding_repo
+from metrics import GAME_DURATION, GAME_STATE, TERRITORY_SIZE, TURN_DURATION
+from repositories.room import lobby_repo, room_repo, sharding_repo
 from services.player import Player
 from settings import settings
+from utils import measure_time
 
 logger = get_logger(__name__)
 
@@ -30,7 +32,7 @@ class RoomManager:
     def __init__(self) -> None:
         self.rooms: dict[str, "GameRoom"] = {}
 
-    async def init_room(self, redis: Redis, map_and_meta: MapAndMeta) -> str:
+    async def save_room(self, redis: Redis, map_and_meta: MapAndMeta) -> str:
         room_key = await room_repo.save_room(redis, map_and_meta)
         return room_key
 
@@ -49,13 +51,29 @@ class RoomManager:
         game_room = GameRoom(room_key, game_map, meta)
         self.rooms[room_key] = game_room
         await sharding_repo.set_room_replica(redis, room_key)
+        await lobby_repo.add_room(redis, len(meta["points_of_interest"][CellType.SPAWN]), room_key)
         return game_room
 
-    async def cleanup_room(self, redis: Redis, room_key: str) -> None:
-        await room_repo.remove_room(redis, room_key)
-        await sharding_repo.remove_room_replica(redis, room_key)
-        if room_key in self.rooms:
-            del self.rooms[room_key]
+    async def play_with_room(self, redis: Redis, room: "GameRoom", player: "Player") -> None:
+        await lobby_repo.add_players(redis, room.room_key)
+        await room.connect(player)
+        await lobby_repo.remove_room(redis, room.room_key)
+        await room.play(player)
+        await room.after_play(player)
+
+    async def cleanup_room(
+        self, redis: Redis, room: Optional["GameRoom"], player: Optional["Player"]
+    ) -> None:
+        if player and room:
+            await room.disconnect(player)
+            await lobby_repo.remove_player(redis, room.room_key)
+            await player.stop_listening()
+        if room and room.need_cleanup() and len(room.players.values()) == 0:
+            await room_repo.remove_room(redis, room.room_key)
+            await sharding_repo.remove_room_replica(redis, room.room_key)
+            await lobby_repo.remove_room(redis, room.room_key)
+            if room.room_key in self.rooms:
+                del self.rooms[room.room_key]
 
 
 room_manager = RoomManager()
@@ -222,7 +240,9 @@ class GameInProgressState(GameState):
     async def handle_player_message(self, player: "Player", message: InMessage) -> None:
         match message["at"]:
             case "move":
-                await player.move(Point(**message["previous"]), Point(**message["current"]))
+                previous = Point(**message.get("previous")) if message.get("previous") else None
+                current = Point(**message.get("current")) if message.get("current") else None
+                await player.move(previous, current)
 
     async def play(self, player: "Player") -> None:
         await self._room.broadcast(StartMessage(at="start"))
@@ -243,13 +263,16 @@ class GameInProgressState(GameState):
 
         while not self._is_game_done():
             self._current_turn += 1
+            GAME_DURATION.observe(self._current_turn)
             start = time.perf_counter()
-            self._make_turn()
-            print("_make_turn", time.perf_counter() - start)
-            await self._room.broadcast(self._update_message)
+            with measure_time(TURN_DURATION, {"operation": "full_turn"}):
+                with measure_time(TURN_DURATION, {"operation": "make_turn"}):
+                    self._make_turn()
+                with measure_time(TURN_DURATION, {"operation": "broadcast"}):
+                    await self._room.broadcast(self._update_message)
             elapsed = time.perf_counter() - start
-            print("_make_turn + send", elapsed)
             await asyncio.sleep(max(0.7 - elapsed, 0))
+
         self._make_turn()
         await self._room.broadcast(self._update_message)
 
@@ -257,42 +280,45 @@ class GameInProgressState(GameState):
         return sum(player.is_ready for player in self._room.players.values()) == 1
 
     def _make_turn(self):
-        self._update_map()
-        for player in self._room.players.values():
-            start = time.perf_counter()
-            self._process_player_move(player)
-            print(f"{player}: _process_player_move", time.perf_counter() - start)
-        start = time.perf_counter()
-        self._update_players_hold()
-        print("_update_players_hold", time.perf_counter() - start)
+        with measure_time(TURN_DURATION, {"operation": "update_map"}):
+            self._update_map()
 
-        for player in self._room.players.values():
-            start = time.perf_counter()
-            self._update_pov(player)
-            print(f"{player}: _update_pov", time.perf_counter() - start)
+        with measure_time(TURN_DURATION, {"operation": "process_moves"}):
+            for player in self._room.players.values():
+                self._process_player_move(player)
+
+        with measure_time(TURN_DURATION, {"operation": "update_hold"}):
+            self._update_players_hold()
+
+        with measure_time(TURN_DURATION, {"operation": "update_pov"}):
+            for player in self._room.players.values():
+                self._update_pov(player)
 
     def _process_player_move(self, player: "Player") -> None:
         move_points = player.get_move_points()
         if not move_points:
             return
 
-        cursor, next_move = move_points
+        player.prev_cursor, player.cursor = cursor, next_move = move_points
         r, c = cursor
         new_r, new_c = next_move
         if not self._is_valid_position(new_r, new_c):
+            player.reset_moves()
             return
 
         target_cell: Cell = self._room.game_map[new_r][new_c]
-        target_cell_type = target_cell["type"]
+        target_cell_type = target_cell.get("type", None)
         target_cell_power = target_cell.get("power", 0)
         target_cell_player = target_cell.get("player")
         if target_cell_type == CellType.BLOCKER:
+            player.reset_moves()
             return
 
         current_cell: Cell = self._room.game_map[r][c]
         current_cell_power = current_cell.get("power", 0) - 1  # при переходе в клетке остается 1
         current_cell_player = current_cell.get("player")
         if not current_cell_player or current_cell_player != player.id or current_cell_power <= 1:
+            player.reset_moves()
             return
 
         if current_cell_player == target_cell_player:
@@ -304,6 +330,7 @@ class GameInProgressState(GameState):
         if power_diff < 0:
             current_cell["power"] = 1
             target_cell["power"] = abs(power_diff)
+            player.reset_moves()
             return
 
         target_cell["player"] = current_cell_player
@@ -332,12 +359,17 @@ class GameInProgressState(GameState):
                     self._room.game_map[r][c]["player"] = fact_player
                 self._room.players[fact_player].takeover_kingdom(player)
 
+    def _check_cursor(self, player: "Player") -> None:
+        if player.cursor and not player.territory.contains(player.cursor):
+            player.reset_moves()
+
     def _update_map(self) -> None:
         for point in chain.from_iterable(p.hold for p in self._room.players.values()):
             cell: Cell = self._room.game_map[point.row][point.col]
-            if cell["type"] == CellType.KING:
+            cell_type = cell.get("type")
+            if cell_type == CellType.KING:
                 cell["power"] = cell.get("power", 0) + 1
-            if cell["type"] == CellType.CASTLE and cell.get("player"):
+            if cell_type == CellType.CASTLE and cell.get("player"):
                 cell["power"] = cell.get("power", 0) + 1
             elif self._current_turn % 15 == 0:
                 cell["power"] = cell.get("power", 0) + 1
@@ -351,7 +383,8 @@ class GameInProgressState(GameState):
         for point in diff:
             r, c = point
             pov_cell = player.pov[r][c]
-            pov_cell["type"] = CellType.HIDE
+            if "type" in pov_cell:
+                del pov_cell["type"]
             if "player" in pov_cell:
                 del pov_cell["player"]
             if "power" in pov_cell:
@@ -361,7 +394,9 @@ class GameInProgressState(GameState):
             r, c = point
             map_cell = self._room.game_map[r][c]
             pov_cell = player.pov[r][c]
-            pov_cell["type"] = map_cell["type"]
+            cell_type = map_cell.get("type")
+            if cell_type:
+                pov_cell["type"] = cell_type
             if "player" in map_cell:
                 pov_cell["player"] = map_cell["player"]
             if "power" in map_cell:
@@ -371,7 +406,8 @@ class GameInProgressState(GameState):
         return 0 <= row < len(self._room.game_map) and 0 <= col < len(self._room.game_map[0])
 
     def _update_message(self, player: "Player") -> UpdateMessage:
-        return UpdateMessage(
+        TERRITORY_SIZE.observe(player.territory.count())
+        message = UpdateMessage(
             at="update",
             map=player.pov,
             turn=self._current_turn,
@@ -382,6 +418,11 @@ class GameInProgressState(GameState):
                 GameStat(fields=player.territory.count(), power=player.power),
             ),
         )
+        if player.cursor:
+            message["cursor"] = {"row": player.cursor.row, "col": player.cursor.col}
+        if player.prev_cursor:
+            message["prev_cursor"] = {"row": player.prev_cursor.row, "col": player.prev_cursor.col}
+        return message
 
 
 class GameFinished(GameState):
@@ -411,8 +452,9 @@ class GameRoom:
             GameStatus.IN_PROGRESS: GameInProgressState(self),
             GameStatus.FINISHED: GameFinished(self),
         }
+        GAME_STATE.labels(room_id=room_key).set(GameStatus.WAITING_FOR_PLAYERS.value)
         self._state: GameState = self._states[GameStatus.WAITING_FOR_PLAYERS]
-        self._room_key: str = room_key
+        self.room_key: str = room_key
         self.players: dict[int, "Player"] = {}
         self.game_map: GameMap = self.prepare_map(game_map)
         self.meta: MapMeta = meta
@@ -425,11 +467,12 @@ class GameRoom:
     def prepare_map(self, game_map: GameMap) -> GameMap:
         for row in game_map:
             for cell in row:
-                if cell["type"] == CellType.CASTLE:
+                if cell.get("type") == CellType.CASTLE:
                     cell["power"] = settings.default_castle_power
         return game_map
 
     def transition_to(self, new_state: GameStatus) -> None:
+        GAME_STATE.labels(room_id=self.room_key).set(new_state.value)
         self._state = self._states[new_state]
 
     def register_player(self, player: "Player") -> None:

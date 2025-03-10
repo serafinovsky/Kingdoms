@@ -1,4 +1,4 @@
-import type { Player } from "../types/room"
+import type { Player, Cursor } from "../types/room"
 import type { GameMap, GameStat, PlayerData } from "../types/map"
 
 export type PlayersMessage = {
@@ -27,5 +27,7 @@ export type UpdateMessage = {
   at: 'update';
   map: GameMap;
   turn: number;
+  cursor: Cursor;
+  prev_cursor: Cursor;
   stat: [PlayerData, GameStat];
 }

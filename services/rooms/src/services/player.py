@@ -1,4 +1,5 @@
 import asyncio
+import json
 from abc import ABC, abstractmethod
 from itertools import product
 from typing import Callable, Coroutine, Iterable
@@ -8,11 +9,12 @@ from fastapi import WebSocket
 from fastapi.websockets import WebSocketState
 
 from app_types.common import PlayerStatus
-from app_types.map import CellType, GameMap, Point
+from app_types.map import GameMap, Point
 from app_types.messages import InMessage, OutMessage
 from app_types.out_messages import AuthConfirmMessage
 from exceptions.player import PlayerNotInit, PlayerTokenIsNotValid, PlayerWrongAuthFlow
 from logger import get_logger
+from metrics import WS_MESSAGE_SIZE
 from services.auth import validate_token
 
 logger = get_logger(__name__)
@@ -52,6 +54,9 @@ class Territory:
 
     def merge(self, other: "Territory") -> None:
         self._territory_mask |= other._territory_mask
+
+    def contains(self, point: Point) -> bool:
+        return bool(self._territory_mask[self._coord.point_to_index(point)])
 
     def clear(self) -> None:
         self._territory_mask.setall(0)
@@ -115,11 +120,12 @@ class Player(ABC):
         self.receive_loop: asyncio.Task | None = None
         self._message_handler: OnMassageType | None = None
         self._disconnect_handler: OnDisconnectType | None = None
-
+        self.cursor: Point | None = None
+        self.prev_cursor: Point | None = None
         self.pov: GameMap = self._generate_empty_map(map_width, map_height)
 
     def _generate_empty_map(self, width: int, height: int) -> GameMap:
-        return [[{"type": CellType.HIDE} for _ in range(width)] for _ in range(height)]
+        return [[{} for _ in range(width)] for _ in range(height)]
 
     @property
     def color(self) -> int:
@@ -152,14 +158,22 @@ class Player(ABC):
     def update_visible_cells(self) -> tuple[Point, ...]:
         return self.visibility.update(self.hold)
 
-    async def move(self, prev: Point, current: Point) -> None:
-        await self.moves.put((prev, current))
+    async def move(self, prev: Point | None, current: Point | None) -> None:
+        if prev and current:
+            await self.moves.put((prev, current))
+            return
+        self.reset_moves()
 
     def get_move_points(self) -> tuple[Point, Point] | None:
         try:
             return self.moves.get_nowait()
         except asyncio.QueueEmpty:
             return None
+
+    def reset_moves(self) -> None:
+        self.moves = asyncio.Queue()
+        self.cursor = None
+        self.prev_cursor = None
 
     @property
     def status(self) -> PlayerStatus:
@@ -265,7 +279,11 @@ class WebsocketPlayer(Player):
 
     async def send_json(self, message: OutMessage) -> None:
         if self.websocket.client_state == WebSocketState.CONNECTED:
-            await self.websocket.send_json(message)
+            text_message = json.dumps(message, separators=(",", ":"), ensure_ascii=False)
+            WS_MESSAGE_SIZE.labels(direction="out", message_type=message["at"]).observe(
+                len(text_message)
+            )
+            await self.websocket.send_text(text_message)
 
     def __repr__(self) -> str:
         return f"WebsocketPlayer(id={self.id}, nick={self.nick})"

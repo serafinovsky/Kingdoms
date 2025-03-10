@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from app_types.common import PlayerStatus
 from app_types.map import GameMap
@@ -40,3 +40,5 @@ class UpdateMessage(TypedDict):
     map: GameMap
     turn: int
     stat: tuple[PlayerData, GameStat]
+    cursor: NotRequired[PointDict]
+    prev_cursor: NotRequired[PointDict]

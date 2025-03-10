@@ -1,14 +1,8 @@
-import { MapEditor } from "../components/MapEditor"
+import { MapList } from "../components/MapList"
 
 
 export default function Maps() {
   return (
-    <MapEditor 
-    onSave={(map) => {
-        console.log('Map saved:', map);
-        // Send map to server or handle it as needed
-    }} 
-    />
+    <MapList />
   );
 };
-

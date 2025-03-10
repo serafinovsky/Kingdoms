@@ -85,9 +85,6 @@ export function UserMenu(props: UserMenuProps) {
             </p>
           </div>
           
-          <MenuLink href="/profile" text="Профиль" />
-          <MenuLink href="/games" text="История игр" />
-          
           <button
             onClick={async () => {
               try {

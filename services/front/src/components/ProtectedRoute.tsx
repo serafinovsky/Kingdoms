@@ -1,9 +1,8 @@
 import { Component, Show } from "solid-js";
-import { Navigate } from "@solidjs/router";
+import { Navigate, useLocation } from "@solidjs/router";
 import { createResource } from "solid-js";
 import { authStore, authActions } from "../stores/authStore";
 import axios from "axios";
-import { LoadingSpinner } from "./LoadingSpinner";
 
 interface ProtectedRouteProps {
   component: Component<{ children?: any }>;
@@ -65,6 +64,7 @@ const SkeletonLayout = () => (
 
 const ProtectedRoute: Component<ProtectedRouteProps> = (props) => {
   const [isAuthorized] = createResource(checkAuth);
+  const location = useLocation();
 
   return (
     <Show
@@ -73,7 +73,7 @@ const ProtectedRoute: Component<ProtectedRouteProps> = (props) => {
     >
       <Show
         when={isAuthorized()}
-        fallback={<Navigate href="/login" />}
+        fallback={<Navigate href={`/login?redirect_to=${encodeURIComponent(location.pathname)}`}  />}
       >
         <props.component />
       </Show>

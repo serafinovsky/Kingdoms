@@ -1,5 +1,4 @@
 import { CellType } from "../types/map";
-import { SpawnIcon } from "./SpawnIcon";
 import { CastleIcon } from "./CastleIcon";
 import { FieldIcon } from "./FieldIcon";
 import type { MapMeta } from "../types/map";
@@ -15,12 +14,6 @@ export function MapInfo(props: MapInfoProps) {
     switch (type) {
       case CellType.CASTLE:
         return <CastleIcon color={color} class="w-4 h-4" />;
-      case CellType.BLOCKER:
-        return <div class="w-4 h-4 bg-zinc-400 rounded" />;
-      case CellType.KING:
-        return <div class="w-4 h-4 text-purple-500 flex items-center justify-center">👑</div>;
-      case CellType.HIDE:
-        return <div class="w-4 h-4 text-amber-500 flex items-center justify-center">🌳</div>;
       default:
         return <FieldIcon color={color} class="w-4 h-4" />;
     }

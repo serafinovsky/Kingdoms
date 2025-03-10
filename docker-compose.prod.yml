@@ -6,9 +6,9 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.to=external
       - --entrypoints.web.http.redirections.entryPoint.scheme=https
-      - --entrypoints.websecure.address=:${EXTERNAL_PORT} # Для внешних запросов
+      - --entrypoints.external.address=:${EXTERNAL_PORT} # Для внешних запросов
       - --entrypoints.internal.address=:${INTERNAL_PORT} # Для внутрених
       - --api.dashboard=true
       - --metrics.prometheus=true
@@ -24,8 +24,7 @@ services:
       - ${EXTERNAL_PORT}:${EXTERNAL_PORT} # Внешний порт
       - ${INTERNAL_PORT}:${INTERNAL_PORT} # Внутренний порт
     networks:
-      - internal
-      - external
+      - kingdoms-network
     volumes:
       - ./letsencrypt:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock
@@ -37,10 +36,10 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.whoami.rule=Host(`whoami.kingdoms-game.ru`)
-      - traefik.http.routers.whoami.entrypoints=websecure
+      - traefik.http.routers.whoami.entrypoints=external
       - traefik.http.routers.whoami.tls.certresolver=myresolver
     networks:
-      - internal
+      - kingdoms-network
 
   kingdoms-pg:
     container_name: kingdoms-pg
@@ -54,7 +53,7 @@ services:
     expose:
       - ${PG_PORT}
     networks:
-      - internal
+      - kingdoms-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $AUTH_PG_USER -d $AUTH_PG_NAME"]
       interval: 10s
@@ -71,7 +70,7 @@ services:
     expose:
       - "${MONGO_PORT}"
     networks:
-      - internal
+      - kingdoms-network
     volumes:
       - mongodata:/data/db
       - ./services/cabinet/dockerization/initCabinet.js:/docker-entrypoint-initdb.d/cabinet.js:ro
@@ -87,7 +86,7 @@ services:
     expose:
       - ${REDIS_PORT}
     networks:
-      - internal
+      - kingdoms-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -114,14 +113,14 @@ services:
       - traefik.http.middlewares.cors-allow-all.headers.accesscontrolmaxage=86400
 
       - traefik.http.routers.auth-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/auth`)
-      - traefik.http.routers.auth-web.entrypoints=websecure
+      - traefik.http.routers.auth-web.entrypoints=external
       - traefik.http.routers.auth-web.middlewares=cors-allow-all
       - traefik.http.routers.auth-web.service=auth-web
       - traefik.http.routers.auth-web.tls.certresolver=myresolver
       - traefik.http.services.auth-web.loadbalancer.server.port=${AUTH_PORT}
 
       - traefik.http.routers.users-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/users`)
-      - traefik.http.routers.users-web.entrypoints=websecure
+      - traefik.http.routers.users-web.entrypoints=external
       - traefik.http.routers.users-web.tls.certresolver=myresolver
       - traefik.http.routers.users-web.service=users-web
       - traefik.http.routers.users-web.middlewares=auth-middleware,cors-allow-all
@@ -133,15 +132,14 @@ services:
       - traefik.http.routers.auth-internal.middlewares=cors-allow-all
       - traefik.http.services.auth-internal.loadbalancer.server.port=${AUTH_PORT}
     networks:
-      - internal
-      - external
+      - kingdoms-network
     expose:
       - "${AUTH_PORT}"
     env_file: ".env"
     working_dir: /opt/projects/app
     volumes:
       - "./services/auth/src:/opt/projects/app/"
-    command: "uvicorn main:app --reload --host ${AUTH_HOST} --port ${AUTH_PORT}"
+    command: "uvicorn main:app --host ${AUTH_HOST} --port ${AUTH_PORT}"
     depends_on:
       kingdoms-redis:
         condition: service_healthy
@@ -169,8 +167,7 @@ services:
       kingdoms-pg:
         condition: service_healthy
     networks:
-      - internal
-      - external
+      - kingdoms-network
 
   kingdoms-cabinet:
     build:
@@ -184,7 +181,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.cabinet-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/cabinet`)
-      - traefik.http.routers.cabinet-web.entrypoints=websecure
+      - traefik.http.routers.cabinet-web.entrypoints=external
       - traefik.http.routers.cabinet-web.middlewares=auth-middleware
       - traefik.http.routers.cabinet-web.tls.certresolver=myresolver
       - traefik.http.routers.cabinet-web.service=cabinet-web
@@ -195,12 +192,12 @@ services:
       - traefik.http.routers.cabinet-internal.service=cabinet-internal
       - traefik.http.services.cabinet-internal.loadbalancer.server.port=${CABINET_PORT}
     networks:
-      - internal
+      - kingdoms-network
     env_file: ".env"
     working_dir: /opt/projects/app
     volumes:
       - "./services/cabinet/src:/opt/projects/app/"
-    command: "uvicorn main:app --reload --host ${CABINET_HOST} --port ${CABINET_PORT} --log-level debug"
+    command: "uvicorn main:app --host ${CABINET_HOST} --port ${CABINET_PORT}"
     depends_on:
       kingdoms-redis:
         condition: service_healthy
@@ -216,10 +213,17 @@ services:
       - "${ROOMS_PORT}"
     labels:
       - traefik.enable=true
-      - traefik.http.routers.rooms-web.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/ws/rooms/`)
-      - traefik.http.routers.rooms-web.entrypoints=websecure
-      - traefik.http.routers.rooms-web.service=rooms-web
+      - traefik.http.routers.rooms-ws.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/ws/rooms/`)
+      - traefik.http.routers.rooms-ws.entrypoints=external
+      - traefik.http.routers.rooms-ws.service=rooms-ws
+      - traefik.http.routers.rooms-ws.tls.certresolver=myresolver
+      - traefik.http.services.rooms-ws.loadbalancer.server.port=${ROOMS_PORT}
+
+      - traefik.http.routers.rooms-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/rooms`)
+      - traefik.http.routers.rooms-web.entrypoints=external
+      - traefik.http.routers.rooms-web.middlewares=auth-middleware
       - traefik.http.routers.rooms-web.tls.certresolver=myresolver
+      - traefik.http.routers.rooms-web.service=rooms-web
       - traefik.http.services.rooms-web.loadbalancer.server.port=${ROOMS_PORT}
 
       - traefik.http.routers.rooms-internal.rule=PathRegexp(`(?i)^/api/v\d+/rooms`)
@@ -227,12 +231,12 @@ services:
       - traefik.http.routers.rooms-internal.service=rooms-internal
       - traefik.http.services.rooms-internal.loadbalancer.server.port=${ROOMS_PORT}
     networks:
-      - internal
+      - kingdoms-network
     env_file: ".env"
     working_dir: /opt/projects/app
     volumes:
       - "./services/rooms/src:/opt/projects/app/"
-    command: "uvicorn main:app --reload --host ${ROOMS_HOST} --port ${ROOMS_PORT} --log-level debug"
+    command: "uvicorn main:app --host ${ROOMS_HOST} --port ${ROOMS_PORT}"
     depends_on:
       kingdoms-mongo:
         condition: service_healthy
@@ -247,11 +251,11 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.front-web.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/`)
-      - traefik.http.routers.front-web.entrypoints=websecure
+      - traefik.http.routers.front-web.entrypoints=external
       - traefik.http.routers.front-web.tls.certresolver=myresolver
       - traefik.http.services.front-web.loadbalancer.server.port=${FRONT_PORT}
     networks:
-      - internal
+      - kingdoms-network
     env_file: ".env"
     volumes:
       - ./services/front/dockerization/prod.conf.template:/etc/nginx/templates/prod.conf.template
@@ -264,8 +268,5 @@ volumes:
   mongodata:
 
 networks:
-  internal:
-    name: kingdoms-internal
-    internal: true
-  external:
-    name: kingdoms-external
+  kingdoms-network:
+    name: kingdoms-network

@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Redirect from "./pages/Redirect";
 import NotFound from "./pages/NotFound";
 import Map from "./pages/Maps";
+import CreateMap from "./pages/CreateMap";
 import Layout from "./layouts/Nav";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -20,6 +21,7 @@ export default function App() {
         )}
       >
         <Route path="/" component={Home} />
+        <Route path="/maps/create" component={CreateMap} />
         <Route path="/maps/" component={Map} />
         <Route path="/rooms/:roomId" component={Room} />
       </Route>
