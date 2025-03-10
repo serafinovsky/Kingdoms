@@ -30,7 +30,7 @@ services:
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
     labels:
       - traefik.enable=true
-      - traefik.http.routers.grafana.rule=PathPrefix(`/grafana`) || PathPrefix(`/grafana/`)
+      - traefik.http.routers.grafana.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/grafana`)
       - traefik.http.routers.grafana.entrypoints=external
       - traefik.http.routers.grafana.priority=200
       - traefik.http.services.grafana.loadbalancer.server.port=3000
