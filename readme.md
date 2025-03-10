@@ -4,7 +4,7 @@
 
 ## 📽️ Демо
 
-https://github.com/serafinovsky/Kingdoms/assets/demo.mp4
+https://github.com/serafinovsky/Kingdoms/blob/master/assets/demo.mp4
 
 ### Игровой процесс
 
