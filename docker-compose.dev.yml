@@ -271,3 +271,4 @@ volumes:
 networks:
   kingdoms-network:
     name: kingdoms-network
+    external: true
