@@ -8,4 +8,8 @@ scrape_configs:
       - targets: ["kingdoms-traefik:8080"]
   - job_name: "rooms"
     static_configs:
-      - targets: ["kingdoms-kingdoms-rooms-1:7400"]
+      - targets:
+          - "kingdoms-kingdoms-rooms-1:7400"
+          - "kingdoms-kingdoms-rooms-2:7400"
+          - "kingdoms-kingdoms-rooms-3:7400"
+          - "kingdoms-kingdoms-rooms-4:7400"
