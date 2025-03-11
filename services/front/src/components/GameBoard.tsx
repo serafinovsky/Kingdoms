@@ -148,9 +148,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     setDirections(prev => {
       const next = new Map(prev);
       const current = next.get(coord) || [];
-      if (!current.includes(direction)) {
-        next.set(coord, [...current, direction]);
-      }
+      next.set(coord, [...current, direction]);
       return next;
     });
   };
@@ -291,6 +289,12 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     rounded-2xl shadow-xl border border-white/10`
   );
 
+  const getUniqueCellDirections = (rowIndex: number, colIndex: number): Direction[] => {
+    const key: CellCoord = `${rowIndex},${colIndex}`;
+    const allDirections = directions().get(key) || [];
+    return [...new Set(allDirections)];
+  };
+
   return (
     <div class="p-4 w-full" tabIndex={0}>
       <div class="flex justify-center">
@@ -308,7 +312,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
                         isSelected={isCursorAt()(rowIndex, colIndex)}
                         isPlayerCell={isPlayerCell()(cell())}
                         color={getColor()(cell())}
-                        directions={getCellDirections(rowIndex, colIndex)}
+                        directions={getUniqueCellDirections(rowIndex, colIndex)}
                         onClick={createCellClickHandler(rowIndex, colIndex, cell())}
                       />
                     )}
