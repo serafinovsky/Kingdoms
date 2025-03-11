@@ -127,7 +127,7 @@ services:
       - traefik.http.routers.users-web.middlewares=auth-middleware,cors-allow-all
       - traefik.http.services.users-web.loadbalancer.server.port=${AUTH_PORT}
 
-      - traefik.http.routers.auth-internal.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/auth`) || PathRegexp(`(?i)^/api/v\d+/users`)
+      - traefik.http.routers.auth-internal.rule=PathRegexp(`(?i)^/api/v\d+/auth`) || PathRegexp(`(?i)^/api/v\d+/users`)
       - traefik.http.routers.auth-internal.entrypoints=internal
       - traefik.http.routers.auth-internal.service=auth-internal
       - traefik.http.routers.auth-internal.middlewares=cors-allow-all
@@ -188,7 +188,7 @@ services:
       - traefik.http.routers.cabinet-web.service=cabinet-web
       - traefik.http.services.cabinet-web.loadbalancer.server.port=${CABINET_PORT}
 
-      - traefik.http.routers.cabinet-internal.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/cabinet`)
+      - traefik.http.routers.cabinet-internal.rule=PathRegexp(`(?i)^/api/v\d+/cabinet`)
       - traefik.http.routers.cabinet-internal.entrypoints=internal
       - traefik.http.routers.cabinet-internal.service=cabinet-internal
       - traefik.http.services.cabinet-internal.loadbalancer.server.port=${CABINET_PORT}
@@ -227,7 +227,7 @@ services:
       - traefik.http.routers.rooms-web.middlewares=auth-middleware
       - traefik.http.services.rooms-web.loadbalancer.server.port=${ROOMS_PORT}
 
-      - traefik.http.routers.rooms-internal.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/rooms`)
+      - traefik.http.routers.rooms-internal.rule=PathRegexp(`(?i)^/api/v\d+/rooms`)
       - traefik.http.routers.rooms-internal.entrypoints=internal
       - traefik.http.routers.rooms-internal.service=rooms-internal
       - traefik.http.services.rooms-internal.loadbalancer.server.port=${ROOMS_PORT}
