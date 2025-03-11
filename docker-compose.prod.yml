@@ -15,6 +15,7 @@ services:
       - --metrics.prometheus.addEntryPointsLabels=true
       - --metrics.prometheus.addServicesLabels=true
       - --log.level=DEBUG
+      - --accesslog=true
       - --certificatesresolvers.myresolver.acme.tlschallenge=true
       - --certificatesresolvers.myresolver.acme.email=m.serafinovsky@yandex.ru
       - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
@@ -121,12 +122,12 @@ services:
 
       - traefik.http.routers.users-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/users`)
       - traefik.http.routers.users-web.entrypoints=external
-      - traefik.http.routers.users-web.tls.certresolver=myresolver
       - traefik.http.routers.users-web.service=users-web
+      - traefik.http.routers.users-web.tls.certresolver=myresolver
       - traefik.http.routers.users-web.middlewares=auth-middleware,cors-allow-all
       - traefik.http.services.users-web.loadbalancer.server.port=${AUTH_PORT}
 
-      - traefik.http.routers.auth-internal.rule=PathRegexp(`(?i)^/api/v\d+/auth`) || PathRegexp(`(?i)^/api/v\d+/users`)
+      - traefik.http.routers.auth-internal.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/auth`) || PathRegexp(`(?i)^/api/v\d+/users`)
       - traefik.http.routers.auth-internal.entrypoints=internal
       - traefik.http.routers.auth-internal.service=auth-internal
       - traefik.http.routers.auth-internal.middlewares=cors-allow-all
@@ -158,8 +159,8 @@ services:
     working_dir: /opt/projects/app
     user: "${USER_ID}:${GROUP_ID}"
     volumes:
-      - "./services/auth/src:/opt/projects/app/"
-      - "./services/media/files:${AUTH_MEDIA_ROOT}"
+      - ./services/auth/src:/opt/projects/app/
+      - ./services/media/files:${AUTH_MEDIA_ROOT}
     command: "taskiq worker tasks:broker"
     depends_on:
       kingdoms-redis:
@@ -187,7 +188,7 @@ services:
       - traefik.http.routers.cabinet-web.service=cabinet-web
       - traefik.http.services.cabinet-web.loadbalancer.server.port=${CABINET_PORT}
 
-      - traefik.http.routers.cabinet-internal.rule=PathRegexp(`(?i)^/api/v\d+/cabinet`)
+      - traefik.http.routers.cabinet-internal.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/cabinet`)
       - traefik.http.routers.cabinet-internal.entrypoints=internal
       - traefik.http.routers.cabinet-internal.service=cabinet-internal
       - traefik.http.services.cabinet-internal.loadbalancer.server.port=${CABINET_PORT}
@@ -221,12 +222,12 @@ services:
 
       - traefik.http.routers.rooms-web.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/rooms`)
       - traefik.http.routers.rooms-web.entrypoints=external
-      - traefik.http.routers.rooms-web.middlewares=auth-middleware
-      - traefik.http.routers.rooms-web.tls.certresolver=myresolver
       - traefik.http.routers.rooms-web.service=rooms-web
+      - traefik.http.routers.rooms-web.tls.certresolver=myresolver
+      - traefik.http.routers.rooms-web.middlewares=auth-middleware
       - traefik.http.services.rooms-web.loadbalancer.server.port=${ROOMS_PORT}
 
-      - traefik.http.routers.rooms-internal.rule=PathRegexp(`(?i)^/api/v\d+/rooms`)
+      - traefik.http.routers.rooms-internal.rule=Host(`kingdoms-game.ru`) && PathRegexp(`(?i)^/api/v\d+/rooms`)
       - traefik.http.routers.rooms-internal.entrypoints=internal
       - traefik.http.routers.rooms-internal.service=rooms-internal
       - traefik.http.services.rooms-internal.loadbalancer.server.port=${ROOMS_PORT}
