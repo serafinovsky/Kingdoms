@@ -14,10 +14,10 @@ type CellCoord = `${number},${number}`;
 const DirectionArrow: Component<{ direction: Direction }> = (props) => {
   const position = createMemo(() => {
     switch (props.direction) {
-      case 'up': return 'top-0';
-      case 'down': return 'bottom-0';
-      case 'left': return 'left-0';
-      case 'right': return 'right-0';
+      case 'up': return 'top-0.5';
+      case 'down': return 'bottom-0.5';
+      case 'left': return 'left-0.5';
+      case 'right': return 'right-0.5';
       default: return '';
     }
   });
@@ -32,19 +32,34 @@ const DirectionArrow: Component<{ direction: Direction }> = (props) => {
   });
 
   return (
-    <svg
-      class={`w-4 h-4 text-sky-500 absolute ${rotation()} ${position()}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
+    <div class={`absolute ${position()} ${rotation()} w-4 h-4 z-10`}>
+      <svg
+        class="absolute inset-0 text-white/90 mix-blend-difference"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="4"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M14 5l7 7m0 0l-7 7m7-7H3"
+        />
+      </svg>
+      <svg
+        class="absolute inset-0 text-grey-950"
+        fill="none"
+        stroke="currentColor"
         stroke-width="2"
-        d="M14 5l7 7m0 0l-7 7m7-7H3"
-      />
-    </svg>
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M14 5l7 7m0 0l-7 7m7-7H3"
+        />
+      </svg>
+    </div>
   );
 };
 
@@ -74,7 +89,10 @@ const GameCell: Component<{
   });
 
   return (
-    <td onClick={props.onClick} class={cellClass()}>
+    <td 
+      onClick={() => props.isPlayerCell && props.onClick()} 
+      class={cellClass()}
+    >
       {CellIcon()}
       <div class="absolute inset-0 flex items-center justify-center">
         <For each={props.directions}>
@@ -111,6 +129,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
 
   const [cursor, setCursor] = createSignal<Cursor>(findKingPosition());
   const [directions, setDirections] = createSignal<Map<CellCoord, Direction[]>>(new Map());
+  const [resetDirections, setResetDirections] = createSignal(false);
 
   const getDirection = (from: Cursor, to: Cursor): Direction | null => {
     if (from.row > to.row) return 'up';
@@ -148,7 +167,6 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
   });
 
   const isPlayerCell = createMemo(() => (cell: Cell) => 
-    (cell.type === 'field' || cell.type === 'king') && 
     cell.player === props.currentUserId
   );
 
@@ -157,18 +175,25 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     return current?.row === row && current?.col === col;
   });
 
+  const allowedMove = (cursor: Cursor): boolean => {
+    const cell = props.data[cursor.row][cursor.col];
+    const hasValidPower = cell.power !== undefined && cell.power > 1;
+    return (cell.player === props.currentUserId && hasValidPower) || directions().size !== 0;
+  };
+
   const moveCursor = (newCursor: Cursor, resetCursor: boolean) => {
     batch(() => {
       if (resetCursor) {
-        setDirections(new Map());
+        setResetDirections(true);
         props.onCursorMove?.({});
         return;
       }
 
+      setResetDirections(false);
       const previousCursor = { ...cursor() };
       if (previousCursor.row !== newCursor.row || previousCursor.col !== newCursor.col) {
         const direction = getDirection(previousCursor, newCursor);
-        if (direction) {
+        if (direction && allowedMove(previousCursor)) {
           const coord: CellCoord = `${previousCursor.row},${previousCursor.col}`;
           addDirection(coord, direction);
         }
@@ -179,14 +204,15 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
     });
   };
 
-  const createCellClickHandler = (rowIndex: number, colIndex: number, cell: Cell) => 
-    createMemo(() => () => {
+  const createCellClickHandler = (rowIndex: number, colIndex: number, cell: Cell) => () => {
+    if (cell.player === props.currentUserId) {
       const newCursor = { row: rowIndex, col: colIndex };
       batch(() => {
         setCursor(newCursor);
         props.onCellClick(rowIndex, colIndex, cell);
       });
-    });
+    }
+  };
 
   const handleKeyDown = createMemo(() => (e: KeyboardEvent) => {
     const current = cursor()!;
@@ -226,27 +252,37 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
   });
 
   createEffect(() => {
-    if (props.gameCursor === undefined && directions().size > 0) {
-      setDirections(new Map());
+    if (props.gameCursor === undefined) {
+      setResetDirections(true);
+    } else {
+      setResetDirections(false);
     }
+  });
+
+  createEffect(() => {
+    if (resetDirections() && directions().size > 0) {
+      setDirections(new Map());
+      return;
+    }
+  })
+
+  createEffect(() => {
     if (props.previousCursor) {
       const coord: CellCoord = `${props.previousCursor.row},${props.previousCursor.col}`;
-      const currentDirections = directions().get(coord) || [];
-      
-      if (currentDirections.length > 0) {
-        setDirections(prev => {
-          const next = new Map(prev);
-          const remaining = currentDirections.slice(1);
-          
-          if (remaining.length === 0) {
-            next.delete(coord);
-          } else {
+      setDirections(prev => {
+        const next = new Map(prev);
+        const directions = next.get(coord);
+        if (directions?.length) {
+          const remaining = directions.slice(1);
+          if (remaining.length > 0) {
             next.set(coord, remaining);
+          } else {
+            next.delete(coord);
           }
-          
-          return next;
-        });
-      }
+        }
+        
+        return next;
+      });
     }
   });
 
@@ -273,7 +309,7 @@ export const GameBoard: Component<GameBoardProps> = (props) => {
                         isPlayerCell={isPlayerCell()(cell())}
                         color={getColor()(cell())}
                         directions={getCellDirections(rowIndex, colIndex)}
-                        onClick={createCellClickHandler(rowIndex, colIndex, cell())()}
+                        onClick={createCellClickHandler(rowIndex, colIndex, cell())}
                       />
                     )}
                   </Index>

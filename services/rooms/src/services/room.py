@@ -317,7 +317,7 @@ class GameInProgressState(GameState):
         current_cell: Cell = self._room.game_map[r][c]
         current_cell_power = current_cell.get("power", 0) - 1  # при переходе в клетке остается 1
         current_cell_player = current_cell.get("player")
-        if not current_cell_player or current_cell_player != player.id or current_cell_power <= 1:
+        if not current_cell_player or current_cell_player != player.id or current_cell_power < 1:
             player.reset_moves()
             return
 
