@@ -14,7 +14,7 @@ services:
       - --metrics.prometheus=true
       - --metrics.prometheus.addEntryPointsLabels=true
       - --metrics.prometheus.addServicesLabels=true
-      - --log.level=DEBUG
+      - --log.level=INFO
       - --accesslog=true
       - --certificatesresolvers.myresolver.acme.tlschallenge=true
       - --certificatesresolvers.myresolver.acme.email=m.serafinovsky@yandex.ru

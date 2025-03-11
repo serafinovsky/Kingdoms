@@ -31,7 +31,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.grafana.rule=Host(`kingdoms-game.ru`) && PathPrefix(`/grafana`)
-      - traefik.http.routers.front-web.tls.certresolver=myresolver
+      - traefik.http.routers.grafana.tls.certresolver=myresolver
       - traefik.http.routers.grafana.entrypoints=external
       - traefik.http.routers.grafana.priority=200
       - traefik.http.services.grafana.loadbalancer.server.port=3000
