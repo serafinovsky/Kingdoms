@@ -45,29 +45,68 @@ class Territory:
         self._coord = MapCoordinator(map_width, map_height)
         self._territory_mask = bitarray(self._coord._array_size)
         self._territory_mask.setall(0)
+        self._cached_points = None
+        self._cached_count = None
+        self._batch_updates = []
+        self._batch_size = 50  # Размер пакета для обновлений
 
     def add_point(self, point: Point) -> None:
         self._territory_mask[self._coord.point_to_index(point)] = 1
+        self._invalidate_cache()
 
     def remove_point(self, point: Point) -> None:
         self._territory_mask[self._coord.point_to_index(point)] = 0
+        self._invalidate_cache()
+
+    def batch_add_points(self, points: list[Point]) -> None:
+        for point in points:
+            self._batch_updates.append((point, True))
+        if len(self._batch_updates) >= self._batch_size:
+            self.apply_batch_updates()
+
+    def batch_remove_points(self, points: list[Point]) -> None:
+        for point in points:
+            self._batch_updates.append((point, False))
+        if len(self._batch_updates) >= self._batch_size:
+            self.apply_batch_updates()
+
+    def apply_batch_updates(self) -> None:
+        if not self._batch_updates:
+            return
+
+        for point, is_add in self._batch_updates:
+            idx = self._coord.point_to_index(point)
+            self._territory_mask[idx] = 1 if is_add else 0
+
+        self._batch_updates.clear()
+        self._invalidate_cache()
 
     def merge(self, other: "Territory") -> None:
         self._territory_mask |= other._territory_mask
+        self._invalidate_cache()
 
     def contains(self, point: Point) -> bool:
         return bool(self._territory_mask[self._coord.point_to_index(point)])
 
     def clear(self) -> None:
         self._territory_mask.setall(0)
+        self._invalidate_cache()
 
     def count(self) -> int:
-        return self._territory_mask.count()
+        if self._cached_count is None:
+            self._cached_count = self._territory_mask.count()
+        return self._cached_count
 
     def points(self) -> tuple[Point, ...]:
-        return tuple(
-            self._coord.index_to_point(i) for i in self._territory_mask.search(bitarray("1"))
-        )
+        if self._cached_points is None:
+            self._cached_points = tuple(
+                self._coord.index_to_point(i) for i in self._territory_mask.search(bitarray("1"))
+            )
+        return self._cached_points
+
+    def _invalidate_cache(self) -> None:
+        self._cached_points = None
+        self._cached_count = None
 
 
 class Visibility:
@@ -79,16 +118,19 @@ class Visibility:
         self._new_visible_mask = bitarray(self._coord._array_size)
         self._visible_mask.setall(0)
         self._new_visible_mask.setall(0)
+        self._cached_points = None
+        self._direction_cache = {}
 
     def update(self, territory_points: Iterable[Point]) -> tuple[Point, ...]:
         self._new_visible_mask.setall(0)
 
         for point in territory_points:
-            for dr, dc in self.DIRECTIONS:
-                new_row, new_col = point.row + dr, point.col + dc
-                if self._coord.is_valid_position(new_row, new_col):
-                    index = self._coord.point_to_index(Point(new_row, new_col))
-                    self._new_visible_mask[index] = 1
+            cache_key = (point.row, point.col)
+            if cache_key not in self._direction_cache:
+                self._direction_cache[cache_key] = self._calculate_visible_points(point)
+
+            for idx in self._direction_cache[cache_key]:
+                self._new_visible_mask[idx] = 1
 
         diff_mask = self._new_visible_mask ^ self._visible_mask
         diff_points = tuple(
@@ -96,12 +138,27 @@ class Visibility:
         )
 
         self._visible_mask = self._new_visible_mask.copy()
+        self._cached_points = None
         return diff_points
 
+    def _calculate_visible_points(self, point: Point) -> set[int]:
+        visible_indices = set()
+        for dr, dc in self.DIRECTIONS:
+            new_row, new_col = point.row + dr, point.col + dc
+            if self._coord.is_valid_position(new_row, new_col):
+                visible_indices.add(self._coord.point_to_index(Point(new_row, new_col)))
+        return visible_indices
+
     def visible_points(self) -> tuple[Point, ...]:
-        return tuple(
-            self._coord.index_to_point(i) for i in self._visible_mask.search(bitarray("1"))
-        )
+        if self._cached_points is None:
+            self._cached_points = tuple(
+                self._coord.index_to_point(i) for i in self._visible_mask.search(bitarray("1"))
+            )
+        return self._cached_points
+
+    def clear_cache(self) -> None:
+        self._direction_cache.clear()
+        self._cached_points = None
 
 
 class Player(ABC):
@@ -218,11 +275,18 @@ class Player(ABC):
     async def stop_listening(self) -> None:
         self.set_stop()
         if self.receive_loop and not self.receive_loop.done():
-            await self.receive_loop
+            self.receive_loop.cancel()
+            try:
+                await self.receive_loop
+            except asyncio.CancelledError:
+                pass
 
     async def wait_messages(self):
         if self.receive_loop and not self.receive_loop.done():
-            await self.receive_loop
+            try:
+                await self.receive_loop
+            except asyncio.CancelledError:
+                pass
 
     @property
     def power(self) -> int:

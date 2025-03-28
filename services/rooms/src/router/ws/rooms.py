@@ -56,4 +56,4 @@ async def ws_room(
         )
         await websocket.close(code=4999, reason="Something wrong")
     finally:
-        await room_manager.cleanup_room(redis, room, player)
+        await room_manager.cleanup(redis, room, player)
